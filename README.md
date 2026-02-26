@@ -1,5 +1,7 @@
 # AI Use Case Context Framework
 
+> **v2.0.0-alpha.1** — This is a pre-release. APIs may change before the stable 2.0.0 release. See the [changelog](CHANGELOG.md) for breaking changes from v1.x.
+
 A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
 ## Risk Dimensions
@@ -527,7 +529,7 @@ class SIEMHook(GovernanceHook):
 pytest
 ```
 
-245 tests covering core classes, custom dimensions, security presets, governance hooks, dashboard aggregation, escalation policies, serialization round-trips, web dashboard pages, interactive actions, and Python sync hooks.
+246 tests covering core classes, custom dimensions, security presets, governance hooks, dashboard aggregation, escalation policies, serialization round-trips, web dashboard pages, interactive actions, and Python sync hooks.
 
 ## Project Structure
 

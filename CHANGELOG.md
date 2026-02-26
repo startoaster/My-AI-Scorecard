@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed unused `RiskDimension` import from `escalation.py`.
 - Fixed stale comment referencing old dimension name in `test_dashboard.py`.
 
+### Migration from 1.x
+
+- Replace `RiskDimension.ETHICAL` with `RiskDimension.BIAS` or `RiskDimension.SAFETY`
+- Replace `RiskDimension.COMMS` with `RiskDimension.SECURITY`
+- Replace `RiskDimension.TECHNICAL` with `RiskDimension.FEASIBILITY` or `RiskDimension.QUALITY`
+- Update any code using `len(RiskDimension)` for score normalization — use `ctx.dimensions()` instead
+
 ## [1.1.0] - 2025-02-26
 
 ### Added

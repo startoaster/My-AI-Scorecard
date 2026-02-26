@@ -2,10 +2,10 @@
 # Create a GitHub release with build artifacts.
 #
 # Usage:
-#   ./scripts/release.sh v1.0.0              # tag a specific commit
+#   ./scripts/release.sh v1.0.0              # tag HEAD
 #   ./scripts/release.sh v1.0.0 808491d      # tag a specific commit by SHA
 #
-# Prerequisites: gh CLI authenticated, python3 with build module installed.
+# Prerequisites: gh CLI authenticated, python3 available.
 
 set -euo pipefail
 
@@ -24,20 +24,24 @@ fi
 git tag -a "$TAG" "$COMMIT" -m "$TAG"
 
 # Build from a temporary worktree at the tagged commit
-TMPDIR=$(mktemp -d)
-trap "git worktree remove '$TMPDIR' 2>/dev/null || rm -rf '$TMPDIR'" EXIT
+BUILD_DIR=$(mktemp -d)
+trap "git worktree remove '$BUILD_DIR' 2>/dev/null || rm -rf '$BUILD_DIR'" EXIT
 
-git worktree add "$TMPDIR" "$TAG" --detach
-(cd "$TMPDIR" && python3 -m build)
+git worktree add "$BUILD_DIR" "$TAG" --detach
+
+# Create a venv and build inside it
+python3 -m venv "$BUILD_DIR/.venv"
+"$BUILD_DIR/.venv/bin/pip" install --quiet build
+(cd "$BUILD_DIR" && "$BUILD_DIR/.venv/bin/python" -m build)
 
 echo "==> Built artifacts:"
-ls -la "$TMPDIR/dist/"
+ls -la "$BUILD_DIR/dist/"
 
 # Push the tag
 git push origin "$TAG"
 
 # Create the GitHub release
-gh release create "$TAG" "$TMPDIR"/dist/* \
+gh release create "$TAG" "$BUILD_DIR"/dist/* \
     --title "$TAG" \
     --generate-notes
 

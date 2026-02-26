@@ -49,7 +49,7 @@ Each dimension is evaluated at five severity levels:
 pip install -e .
 ```
 
-Requires Python 3.10+. No external dependencies for the core library.
+Requires Python 3.9+. No external dependencies for the core library.
 
 For the web dashboard:
 
@@ -57,7 +57,7 @@ For the web dashboard:
 pip install -e ".[web]"
 ```
 
-For development (tests + web):
+For development (tests):
 
 ```bash
 pip install -e ".[dev]"
@@ -105,6 +105,51 @@ Risk Flags:
 
 Action needed from: VP Legal / Business Affairs
 ```
+
+## Web Dashboard
+
+The framework includes an interactive web dashboard for managing risk flags, viewing portfolio status, and tracking reviewer workload — all from a browser.
+
+### Launch
+
+```bash
+pip install -e ".[web]"
+python -m ai_use_case_context.web
+```
+
+Then open [http://127.0.0.1:5000](http://127.0.0.1:5000). Click **Seed Demo Data** in the navigation bar to load five realistic use cases.
+
+> **macOS note:** Port 5000 is used by AirPlay Receiver on macOS Monterey and later. Either disable it in System Settings > AirDrop & Handoff, or use a different port: `python -m ai_use_case_context.web --port 8080`.
+
+### Features
+
+- **Portfolio overview** — risk heatmap, blocker list, and KPI cards at a glance
+- **Score reports** — per-use-case composite risk bars and flag breakdown
+- **Reviewer workload** — see open assignments grouped by reviewer
+- **Flag management** — add, resolve, accept, or begin review on flags directly from the UI
+- **Escalation alerts** — stale flags are highlighted when they exceed policy thresholds
+
+### Programmatic usage
+
+Start the dashboard from Python and subscribe to events so your code stays in sync with actions taken in the browser:
+
+```python
+from ai_use_case_context.web import create_app, get_dashboard, on
+
+# Register your own use cases alongside the web UI
+dashboard = get_dashboard()
+dashboard.register(my_use_case)
+
+# React to web actions in Python
+@on("flag_resolved")
+def handle_resolve(use_case_name, flag_index, flag):
+    print(f"Resolved on {use_case_name}: {flag.description}")
+
+app = create_app()
+app.run()
+```
+
+Available events: `use_case_registered`, `flag_added`, `flag_resolved`, `flag_accepted`, `flag_review_started`, `escalation_applied`, `dashboard_reset`.
 
 ## Core API
 
@@ -293,13 +338,16 @@ restored = from_dict(data)
 
 All metadata, flag states, timestamps, and resolution notes are preserved through round-trips. Enums are serialized by name (e.g., `"CRITICAL"` not `4`), datetimes as ISO-8601 strings. Custom dimensions are preserved with their labels via a `dimension_label` field in the serialized output.
 
-## Web Dashboard
+## Web Dashboard (detailed)
 
-A browser-based dashboard for running score reports and managing governance status interactively.
+A browser-based dashboard for running score reports and managing governance status interactively. All data is held **in-memory** — it resets when the server restarts. Use the [serialization API](#serialization) to persist data across sessions.
 
 ### Launch
 
 ```bash
+# Install Flask (required)
+pip install -e ".[web]"
+
 # Run directly
 python -m ai_use_case_context
 
@@ -307,7 +355,7 @@ python -m ai_use_case_context
 python -m ai_use_case_context.web --port 8080
 ```
 
-Then visit `http://127.0.0.1:5000`. Click **Seed Demo Data** to load 5 sample use cases.
+Then visit `http://127.0.0.1:5000` (or your custom port). Click **Seed Demo Data** in the navigation bar to load 5 sample use cases.
 
 ### Pages
 
@@ -486,8 +534,8 @@ pytest
 ```
 ai_use_case_context/
   __init__.py          Public API exports
-  __main__.py          CLI entry point (python -m ai_use_case_context)
-  core.py              RiskDimension, RiskLevel, ReviewStatus, RiskFlag, UseCaseContext, Dimension, custom_dimension
+  __main__.py          CLI entry point (launches web dashboard)
+  core.py              RiskDimension, RiskLevel, ReviewStatus, RiskFlag, UseCaseContext
   dashboard.py         GovernanceDashboard, DimensionSummary
   escalation.py        EscalationPolicy, EscalationRule, EscalationResult
   serialization.py     to_dict, from_dict, to_json, from_json

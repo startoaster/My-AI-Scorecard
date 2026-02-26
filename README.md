@@ -319,7 +319,7 @@ Then visit `http://127.0.0.1:5000`. Click **Seed Demo Data** to load 5 sample us
 | `/use-case/<name>` | Use case detail — flag table with action buttons, score breakdown |
 | `/add-use-case` | Create a new use case |
 | `/security` | Security profiles — apply TPN/VFX/Enterprise presets, manage active profile |
-| `/seed` | Load 5 demo use cases with realistic risk flags |
+| `/seed` | Load 5 demo use cases with realistic risk flags (GET shows confirmation, POST seeds) |
 
 ### Interactive Actions
 

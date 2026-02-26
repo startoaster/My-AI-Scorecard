@@ -63,34 +63,40 @@ class TestPageLoading:
 
 
 class TestSeedData:
-    def test_seed_loads_data(self, client):
+    def test_seed_get_shows_confirmation(self, client):
         r = client.get("/seed")
+        assert r.status_code == 200
+        assert b"replace all current data" in r.data
+        assert len(_dashboard.use_cases) == 0
+
+    def test_seed_loads_data(self, client):
+        r = client.post("/seed")
         assert r.status_code == 200
         assert b"Demo Data Seeded" in r.data
         assert len(_dashboard.use_cases) == 5
 
     def test_seed_then_dashboard(self, client):
-        client.get("/seed")
+        client.post("/seed")
         r = client.get("/")
         assert b"AI Upscaling" in r.data
         assert b"AI Voice Synthesis" in r.data
         assert b"BLOCKED" in r.data
 
     def test_seed_then_scores(self, client):
-        client.get("/seed")
+        client.post("/seed")
         r = client.get("/scores")
         assert b"Composite Risk Score" in r.data
 
     def test_seed_then_reviewers(self, client):
-        client.get("/seed")
+        client.post("/seed")
         r = client.get("/reviewers")
         # There should be several reviewers with pending work
         assert b"item" in r.data
 
     def test_seed_replaces_previous(self, client):
-        client.get("/seed")
+        client.post("/seed")
         assert len(_dashboard.use_cases) == 5
-        client.get("/seed")
+        client.post("/seed")
         assert len(_dashboard.use_cases) == 5
 
 
@@ -136,7 +142,7 @@ class TestUseCaseDetail:
         assert b"Blocking issue" in r.data
 
     def test_risk_heatmap_renders(self, client):
-        client.get("/seed")
+        client.post("/seed")
         r = client.get("/")
         assert b"Risk Heatmap" in r.data
 
@@ -194,7 +200,7 @@ class TestFlagActions:
 
 class TestEscalation:
     def test_escalate_action(self, client):
-        client.get("/seed")
+        client.post("/seed")
         # AI Script Analysis has a 5-day-old MEDIUM flag — should escalate
         r = client.post("/use-case/AI Script Analysis/escalate", follow_redirects=True)
         assert r.status_code == 200
@@ -205,7 +211,7 @@ class TestEscalation:
         assert len(escalated) >= 1
 
     def test_escalation_shown_on_scores(self, client):
-        client.get("/seed")
+        client.post("/seed")
         r = client.get("/scores")
         assert b"Escalation Check" in r.data
 
@@ -317,7 +323,7 @@ class TestHooks:
         def handler(uc_name, count, results):
             events.append((uc_name, count))
 
-        client.get("/seed")
+        client.post("/seed")
         client.post("/use-case/AI Script Analysis/escalate")
         assert len(events) == 1
         assert events[0][0] == "AI Script Analysis"

@@ -70,7 +70,7 @@ class TestGovernanceDashboard:
         blocked = db.blocked_use_cases()
         names = [uc.name for uc in blocked]
         assert "AI Upscaling" in names  # HIGH legal flag
-        assert "AI Script Analysis" in names  # CRITICAL comms flag
+        assert "AI Script Analysis" in names  # CRITICAL safety flag
         assert "AI Color Grading" not in names
 
     def test_clear_use_cases(self):

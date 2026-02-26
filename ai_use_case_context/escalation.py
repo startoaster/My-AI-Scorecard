@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from ai_use_case_context.core import (
-    RiskDimension,
     RiskLevel,
     ReviewStatus,
     RiskFlag,

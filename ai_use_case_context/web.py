@@ -390,7 +390,7 @@ def create_app() -> Flask:
         for uc in ucs:
             risk_scores = uc.risk_score()
             total_score = sum(risk_scores.values())
-            max_possible = len(RiskDimension) * RiskLevel.CRITICAL.value
+            max_possible = len(uc.dimensions()) * RiskLevel.CRITICAL.value
 
             body += '<div class="section">'
             body += f'<h2><a href="/use-case/{_e(uc.name)}" style="color:inherit;text-decoration:none">{_e(uc.name)}</a></h2>'
@@ -791,8 +791,18 @@ def create_app() -> Flask:
 
     # ---- Seed demo data --------------------------------------------------
 
-    @app.route("/seed")
+    @app.route("/seed", methods=["GET", "POST"])
     def seed():
+        if request.method == "GET":
+            body = '<h1 style="margin-bottom:20px">Seed Demo Data</h1>'
+            body += '<div class="section">'
+            body += '<p>This will <strong>replace all current data</strong> with 5 demo use cases.</p>'
+            body += '<form method="POST" style="margin-top:16px">'
+            body += '<button type="submit" class="btn btn-primary">Seed Demo Data</button>'
+            body += ' <a href="/" style="margin-left:12px">Cancel</a>'
+            body += '</form></div>'
+            return _layout("Seed Demo Data", body, active="seed")
+
         _dashboard._use_cases.clear()
 
         # 1. AI Upscaling - Hero Shots

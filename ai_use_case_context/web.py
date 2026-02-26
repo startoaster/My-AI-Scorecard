@@ -41,6 +41,8 @@ from ai_use_case_context.core import (
     ReviewStatus,
     RiskFlag,
     UseCaseContext,
+    Dimension,
+    DimensionType,
 )
 from ai_use_case_context.dashboard import GovernanceDashboard
 from ai_use_case_context.escalation import EscalationPolicy
@@ -292,15 +294,17 @@ def create_app() -> Flask:
 
         # Risk heatmap
         if ucs:
+            all_dims = _dashboard.all_dimensions()
             scores = _dashboard.portfolio_risk_scores()
-            body += '<div class="section"><h2>Risk Heatmap</h2><div class="heatmap">'
+            ncols = len(all_dims)
+            body += f'<div class="section"><h2>Risk Heatmap</h2><div class="heatmap" style="grid-template-columns:180px repeat({ncols}, 1fr)">'
             body += '<div class="header"></div>'
-            for dim in RiskDimension:
+            for dim in all_dims:
                 short = dim.value.split("/")[0].split("(")[0].strip()
                 body += f'<div class="header">{_e(short)}</div>'
             for uc_name, dim_scores in scores.items():
                 body += f'<div class="label"><a href="/use-case/{_e(uc_name)}" style="color:inherit;text-decoration:none">{_e(uc_name)}</a></div>'
-                for dim in RiskDimension:
+                for dim in all_dims:
                     val = dim_scores.get(dim.value, 0)
                     level = RiskLevel(val)
                     fg, bg = _LEVEL_COLORS[level]
@@ -310,7 +314,7 @@ def create_app() -> Flask:
         # Dimension overview
         body += '<div class="section"><h2>Dimension Overview</h2><table>'
         body += '<tr><th>Dimension</th><th>Max Level</th><th>Open</th><th>Blocking</th><th>Total</th><th>Affected Use Cases</th></tr>'
-        for dim in RiskDimension:
+        for dim in _dashboard.all_dimensions():
             ds = _dashboard.dimension_summary(dim)
             body += f'<tr><td>{_e(dim.value)}</td><td>{_level_badge(ds.max_level)}</td>'
             body += f'<td>{ds.open_flags}</td><td>{ds.blocking_flags}</td><td>{ds.total_flags}</td>'
@@ -369,7 +373,7 @@ def create_app() -> Flask:
 
             # Per-dimension scores
             body += '<table><tr><th>Dimension</th><th>Score</th><th>Level</th><th>Open Flags</th></tr>'
-            for dim in RiskDimension:
+            for dim in uc.dimensions():
                 val = risk_scores.get(dim.value, 0)
                 level = RiskLevel(val)
                 open_count = sum(
@@ -457,7 +461,7 @@ def create_app() -> Flask:
         risk_scores = uc.risk_score()
         body += '<div class="section"><h2>Risk Score Breakdown</h2><table>'
         body += '<tr><th>Dimension</th><th>Score</th><th>Level</th></tr>'
-        for dim in RiskDimension:
+        for dim in uc.dimensions():
             val = risk_scores.get(dim.value, 0)
             body += f'<tr><td>{_e(dim.value)}</td><td>{val} / {RiskLevel.CRITICAL.value}</td><td>{_level_badge(RiskLevel(val))}</td></tr>'
         body += '</table></div>'
@@ -489,7 +493,7 @@ def create_app() -> Flask:
         body += f'<form method="post" action="/use-case/{_e(name)}/add-flag">'
         body += '<div class="form-row">'
         body += '<div class="form-group"><label>Dimension</label><select name="dimension">'
-        for dim in RiskDimension:
+        for dim in uc.dimensions():
             body += f'<option value="{dim.name}">{_e(dim.value)}</option>'
         body += '</select></div>'
         body += '<div class="form-group"><label>Level</label><select name="level">'
@@ -545,7 +549,14 @@ def create_app() -> Flask:
     def add_flag(name):
         uc = _dashboard._use_cases.get(name)
         if uc:
-            dim = RiskDimension[request.form["dimension"]]
+            dim_name = request.form["dimension"]
+            try:
+                dim = RiskDimension[dim_name]
+            except KeyError:
+                # Look up the custom dimension from the use case's known dims
+                dim = next((d for d in uc.dimensions() if d.name == dim_name), None)
+                if dim is None:
+                    return redirect(url_for("use_case_detail", name=name))
             level = RiskLevel[request.form["level"]]
             desc = request.form.get("description", "").strip()
             if desc:

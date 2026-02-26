@@ -19,6 +19,9 @@ from ai_use_case_context.core import (
     ReviewStatus,
     RiskFlag,
     UseCaseContext,
+    Dimension,
+    DimensionType,
+    custom_dimension,
     DEFAULT_ROUTING,
 )
 from ai_use_case_context.dashboard import GovernanceDashboard
@@ -36,6 +39,9 @@ __all__ = [
     "ReviewStatus",
     "RiskFlag",
     "UseCaseContext",
+    "Dimension",
+    "DimensionType",
+    "custom_dimension",
     "DEFAULT_ROUTING",
     "GovernanceDashboard",
     "EscalationPolicy",
@@ -46,4 +52,4 @@ __all__ = [
     "from_json",
 ]
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

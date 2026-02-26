@@ -17,6 +17,7 @@ from ai_use_case_context.core import (
     ReviewStatus,
     RiskFlag,
     UseCaseContext,
+    Dimension,
     DEFAULT_ROUTING,
 )
 
@@ -36,7 +37,7 @@ def _deserialize_datetime(s: Optional[str]) -> Optional[datetime]:
 
 
 def _flag_to_dict(flag: RiskFlag) -> dict[str, Any]:
-    return {
+    d: dict[str, Any] = {
         "dimension": flag.dimension.name,
         "level": flag.level.name,
         "description": flag.description,
@@ -46,11 +47,25 @@ def _flag_to_dict(flag: RiskFlag) -> dict[str, Any]:
         "created_at": _serialize_datetime(flag.created_at),
         "resolved_at": _serialize_datetime(flag.resolved_at),
     }
+    # For custom dimensions, also store the label so we can restore it
+    if isinstance(flag.dimension, Dimension):
+        d["dimension_label"] = flag.dimension.value
+    return d
+
+
+def _deserialize_dimension(data: dict[str, Any]):
+    """Restore a dimension from serialized data — built-in or custom."""
+    name = data["dimension"]
+    try:
+        return RiskDimension[name]
+    except KeyError:
+        label = data.get("dimension_label", name)
+        return Dimension(name, label)
 
 
 def _flag_from_dict(data: dict[str, Any]) -> RiskFlag:
     return RiskFlag(
-        dimension=RiskDimension[data["dimension"]],
+        dimension=_deserialize_dimension(data),
         level=RiskLevel[data["level"]],
         description=data["description"],
         reviewer=data.get("reviewer", ""),

@@ -5,10 +5,12 @@ Contains the enums, data classes, routing table, and main UseCaseContext class
 that implement the flag / route / block governance model.
 """
 
+from __future__ import annotations
+
 from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
 
 # ---------------------------------------------------------------------------
@@ -16,11 +18,82 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 class RiskDimension(Enum):
-    """The four governance dimensions evaluated for every AI use case."""
+    """The four built-in governance dimensions."""
     LEGAL_IP = "Legal / IP Ownership"
     ETHICAL = "Ethical / Bias / Safety"
     COMMS = "Communications / Public Perception"
     TECHNICAL = "Technical Feasibility / Quality"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, RiskDimension):
+            return self is other
+        if isinstance(other, Dimension):
+            return self.name == other.name
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+
+# ---------------------------------------------------------------------------
+# Custom dimensions
+# ---------------------------------------------------------------------------
+
+class Dimension:
+    """A user-defined risk dimension.
+
+    Works interchangeably with built-in ``RiskDimension`` enum members
+    everywhere in the framework — routing tables, dashboards, serialization,
+    and the web UI all discover and render custom dimensions automatically.
+
+    Use the ``custom_dimension()`` factory for convenience::
+
+        FINANCIAL = custom_dimension("FINANCIAL", "Financial Risk")
+        ctx.flag_risk(FINANCIAL, RiskLevel.HIGH, "Budget overrun likely")
+
+    Attributes:
+        name:  Short identifier (e.g. ``"FINANCIAL"``).  Must be unique.
+        value: Human-readable label (e.g. ``"Financial Risk"``).
+    """
+
+    __slots__ = ("name", "value")
+
+    def __init__(self, name: str, value: str):
+        self.name = name
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Dimension):
+            return self.name == other.name
+        if isinstance(other, RiskDimension):
+            return self.name == other.name
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+    def __repr__(self) -> str:
+        return f"Dimension({self.name!r}, {self.value!r})"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def custom_dimension(name: str, label: str) -> Dimension:
+    """Create a custom risk dimension.
+
+    Example::
+
+        FINANCIAL = custom_dimension("FINANCIAL", "Financial Risk")
+        REGULATORY = custom_dimension("REGULATORY", "Regulatory Compliance")
+
+        ctx.flag_risk(FINANCIAL, RiskLevel.HIGH, "Budget overrun")
+    """
+    return Dimension(name, label)
+
+
+# Type accepted everywhere a dimension is needed.
+DimensionType = Union[RiskDimension, Dimension]
 
 
 class RiskLevel(Enum):
@@ -55,7 +128,7 @@ class ReviewStatus(Enum):
 @dataclass
 class RiskFlag:
     """A single risk flag attached to a use case."""
-    dimension: RiskDimension
+    dimension: DimensionType
     level: RiskLevel
     description: str
     reviewer: str = ""
@@ -169,7 +242,7 @@ class UseCaseContext:
         description: str = "",
         workflow_phase: str = "",
         tags: Optional[list[str]] = None,
-        routing_table: Optional[dict[tuple[RiskDimension, RiskLevel], str]] = None,
+        routing_table: Optional[dict[tuple[DimensionType, RiskLevel], str]] = None,
     ):
         self.name = name
         self.description = description
@@ -183,7 +256,7 @@ class UseCaseContext:
 
     def flag_risk(
         self,
-        dimension: RiskDimension,
+        dimension: DimensionType,
         level: RiskLevel,
         description: str,
         reviewer: str = "",
@@ -234,13 +307,23 @@ class UseCaseContext:
 
     # -- Scoring -----------------------------------------------------------
 
+    def dimensions(self) -> list[DimensionType]:
+        """Return all dimensions present in flags, plus all built-in ones."""
+        seen: dict[str, DimensionType] = {}
+        for flag in self.risk_flags:
+            seen.setdefault(flag.dimension.name, flag.dimension)
+        for dim in RiskDimension:
+            seen.setdefault(dim.name, dim)
+        return list(seen.values())
+
     def risk_score(self) -> dict[str, int]:
         """
         Return a simple risk score per dimension (max unresolved level).
+        Includes all built-in dimensions plus any custom ones with flags.
         Useful for dashboards and summary views.
         """
         scores: dict[str, int] = {}
-        for dim in RiskDimension:
+        for dim in self.dimensions():
             dim_flags = [
                 f for f in self.risk_flags
                 if f.dimension == dim
@@ -253,7 +336,7 @@ class UseCaseContext:
 
     # -- Querying ----------------------------------------------------------
 
-    def get_flags_by_dimension(self, dimension: RiskDimension) -> list[RiskFlag]:
+    def get_flags_by_dimension(self, dimension: DimensionType) -> list[RiskFlag]:
         """Return all flags for a specific dimension."""
         return [f for f in self.risk_flags if f.dimension == dimension]
 

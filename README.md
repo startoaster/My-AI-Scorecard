@@ -55,7 +55,7 @@ For the web dashboard:
 pip install -e ".[web]"
 ```
 
-For development (tests + web):
+For development (tests):
 
 ```bash
 pip install -e ".[dev]"
@@ -103,6 +103,49 @@ Risk Flags:
 
 Action needed from: VP Legal / Business Affairs
 ```
+
+## Web Dashboard
+
+The framework includes an interactive web dashboard for managing risk flags, viewing portfolio status, and tracking reviewer workload — all from a browser.
+
+### Launch
+
+```bash
+pip install -e ".[web]"
+python -m ai_use_case_context.web
+```
+
+Then open [http://127.0.0.1:5000](http://127.0.0.1:5000). Click **"Load demo data"** on the dashboard to seed five realistic use cases.
+
+### Features
+
+- **Portfolio overview** — risk heatmap, blocker list, and KPI cards at a glance
+- **Score reports** — per-use-case composite risk bars and flag breakdown
+- **Reviewer workload** — see open assignments grouped by reviewer
+- **Flag management** — add, resolve, accept, or begin review on flags directly from the UI
+- **Escalation alerts** — stale flags are highlighted when they exceed policy thresholds
+
+### Programmatic usage
+
+Start the dashboard from Python and subscribe to events so your code stays in sync with actions taken in the browser:
+
+```python
+from ai_use_case_context.web import create_app, get_dashboard, on
+
+# Register your own use cases alongside the web UI
+dashboard = get_dashboard()
+dashboard.register(my_use_case)
+
+# React to web actions in Python
+@on("flag_resolved")
+def handle_resolve(use_case_name, flag_index, flag):
+    print(f"Resolved on {use_case_name}: {flag.description}")
+
+app = create_app()
+app.run()
+```
+
+Available events: `use_case_registered`, `flag_added`, `flag_resolved`, `flag_accepted`, `flag_review_started`, `escalation_applied`, `dashboard_reset`.
 
 ## Core API
 
@@ -416,19 +459,18 @@ pytest
 ```
 ai_use_case_context/
   __init__.py          Public API exports
-  __main__.py          CLI entry point (python -m ai_use_case_context)
-  core.py              RiskDimension, RiskLevel, ReviewStatus, RiskFlag, UseCaseContext, Dimension, custom_dimension
+  __main__.py          CLI entry point (launches web dashboard)
+  core.py              RiskDimension, RiskLevel, ReviewStatus, RiskFlag, UseCaseContext
   dashboard.py         GovernanceDashboard, DimensionSummary
   escalation.py        EscalationPolicy, EscalationRule, EscalationResult
   serialization.py     to_dict, from_dict, to_json, from_json
-  web.py               Flask web dashboard, hooks, Python sync API
+  web.py               Flask web dashboard with event hooks
 tests/
-  test_core.py              Core class tests
-  test_custom_dimensions.py Custom dimension tests across all layers
-  test_dashboard.py         Dashboard aggregation tests
-  test_escalation.py        Escalation policy tests
-  test_serialization.py     Serialization round-trip tests
-  test_web.py               Web dashboard, actions, hooks, and sync tests
+  test_core.py         Core class tests
+  test_dashboard.py    Dashboard aggregation tests
+  test_escalation.py   Escalation policy tests
+  test_serialization.py  Serialization round-trip tests
+  test_web.py          Web dashboard and event hook tests
 examples/
   basic_usage.py       Flag, route, block, resolve workflow
   portfolio_dashboard.py  Multi-use-case aggregation

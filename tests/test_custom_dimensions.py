@@ -96,7 +96,7 @@ class TestDimension:
     def test_builtin_eq_preserved(self):
         """Built-in dimensions still compare correctly with each other."""
         assert RiskDimension.LEGAL_IP == RiskDimension.LEGAL_IP
-        assert RiskDimension.LEGAL_IP != RiskDimension.ETHICAL
+        assert RiskDimension.LEGAL_IP != RiskDimension.BIAS
 
 
 # -- RiskFlag with custom dimension ----------------------------------------
@@ -144,7 +144,7 @@ class TestUseCaseCustomDimensions:
         assert scores["Financial Risk"] == 3
         assert scores["Legal / IP Ownership"] == 1
         # Built-in dimensions with no flags still appear
-        assert "Technical Feasibility / Quality" in scores
+        assert "Technical Feasibility" in scores
 
     def test_dimensions_method(self):
         ctx = UseCaseContext(name="Test")
@@ -167,7 +167,7 @@ class TestUseCaseCustomDimensions:
     def test_mixed_dimensions_blocking(self):
         ctx = UseCaseContext(name="Test")
         ctx.flag_risk(FINANCIAL, RiskLevel.CRITICAL, "Blocker")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "OK")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "OK")
         assert ctx.is_blocked()
         blockers = ctx.get_blockers()
         assert len(blockers) == 1
@@ -257,14 +257,14 @@ class TestSerializationCustomDimensions:
     def test_round_trip_dict_custom(self):
         ctx = UseCaseContext(name="Test")
         ctx.flag_risk(FINANCIAL, RiskLevel.HIGH, "Budget")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "OK")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "OK")
         data = to_dict(ctx)
         restored = from_dict(data)
         assert len(restored.risk_flags) == 2
         assert isinstance(restored.risk_flags[0].dimension, Dimension)
         assert restored.risk_flags[0].dimension.name == "FINANCIAL"
         assert restored.risk_flags[0].dimension.value == "Financial Risk"
-        assert restored.risk_flags[1].dimension == RiskDimension.ETHICAL
+        assert restored.risk_flags[1].dimension == RiskDimension.BIAS
 
     def test_round_trip_json_custom(self):
         ctx = UseCaseContext(name="Test")

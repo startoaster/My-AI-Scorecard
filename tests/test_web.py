@@ -147,7 +147,7 @@ class TestUseCaseDetail:
 class TestFlagActions:
     def _setup_uc(self):
         uc = UseCaseContext(name="ActionUC")
-        uc.flag_risk(RiskDimension.ETHICAL, RiskLevel.HIGH, "Test flag")
+        uc.flag_risk(RiskDimension.BIAS, RiskLevel.HIGH, "Test flag")
         _dashboard.register(uc)
         return uc
 
@@ -174,13 +174,13 @@ class TestFlagActions:
     def test_add_flag(self, client):
         uc = self._setup_uc()
         r = client.post("/use-case/ActionUC/add-flag", data={
-            "dimension": "COMMS",
+            "dimension": "SECURITY",
             "level": "MEDIUM",
             "description": "New flag via form",
         }, follow_redirects=True)
         assert r.status_code == 200
         assert len(uc.risk_flags) == 2
-        assert uc.risk_flags[1].dimension == RiskDimension.COMMS
+        assert uc.risk_flags[1].dimension == RiskDimension.SECURITY
         assert uc.risk_flags[1].level == RiskLevel.MEDIUM
 
     def test_invalid_flag_index(self, client):
@@ -244,7 +244,7 @@ class TestHooks:
         on("flag_accepted", handler)
 
         uc = UseCaseContext(name="HookUC2")
-        uc.flag_risk(RiskDimension.ETHICAL, RiskLevel.HIGH, "test")
+        uc.flag_risk(RiskDimension.BIAS, RiskLevel.HIGH, "test")
         _dashboard.register(uc)
         client.post("/use-case/HookUC2/flag/0/accept")
         assert events == ["HookUC2"]
@@ -280,7 +280,7 @@ class TestHooks:
         uc = UseCaseContext(name="AddHookUC")
         _dashboard.register(uc)
         client.post("/use-case/AddHookUC/add-flag", data={
-            "dimension": "COMMS",
+            "dimension": "SECURITY",
             "level": "MEDIUM",
             "description": "hook test flag",
         })
@@ -295,7 +295,7 @@ class TestHooks:
             events.append(uc_name)
 
         uc = UseCaseContext(name="ReviewHookUC")
-        uc.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "test")
+        uc.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "test")
         _dashboard.register(uc)
         client.post("/use-case/ReviewHookUC/flag/0/review")
         assert events == ["ReviewHookUC"]

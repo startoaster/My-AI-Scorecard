@@ -36,7 +36,7 @@ class TestRiskFlag:
 
     def test_not_blocking_medium(self):
         flag = RiskFlag(
-            dimension=RiskDimension.ETHICAL,
+            dimension=RiskDimension.BIAS,
             level=RiskLevel.MEDIUM,
             description="test",
         )
@@ -44,7 +44,7 @@ class TestRiskFlag:
 
     def test_not_blocking_low(self):
         flag = RiskFlag(
-            dimension=RiskDimension.COMMS,
+            dimension=RiskDimension.SAFETY,
             level=RiskLevel.LOW,
             description="test",
         )
@@ -52,7 +52,7 @@ class TestRiskFlag:
 
     def test_not_blocking_none(self):
         flag = RiskFlag(
-            dimension=RiskDimension.TECHNICAL,
+            dimension=RiskDimension.FEASIBILITY,
             level=RiskLevel.NONE,
             description="test",
         )
@@ -82,7 +82,7 @@ class TestRiskFlag:
 
     def test_needs_review_medium_open(self):
         flag = RiskFlag(
-            dimension=RiskDimension.ETHICAL,
+            dimension=RiskDimension.BIAS,
             level=RiskLevel.MEDIUM,
             description="test",
         )
@@ -90,7 +90,7 @@ class TestRiskFlag:
 
     def test_needs_review_high_open(self):
         flag = RiskFlag(
-            dimension=RiskDimension.ETHICAL,
+            dimension=RiskDimension.BIAS,
             level=RiskLevel.HIGH,
             description="test",
         )
@@ -98,7 +98,7 @@ class TestRiskFlag:
 
     def test_no_review_needed_low(self):
         flag = RiskFlag(
-            dimension=RiskDimension.COMMS,
+            dimension=RiskDimension.SAFETY,
             level=RiskLevel.LOW,
             description="test",
         )
@@ -106,7 +106,7 @@ class TestRiskFlag:
 
     def test_no_review_needed_resolved(self):
         flag = RiskFlag(
-            dimension=RiskDimension.ETHICAL,
+            dimension=RiskDimension.BIAS,
             level=RiskLevel.MEDIUM,
             description="test",
             status=ReviewStatus.RESOLVED,
@@ -115,7 +115,7 @@ class TestRiskFlag:
 
     def test_no_review_needed_in_review(self):
         flag = RiskFlag(
-            dimension=RiskDimension.ETHICAL,
+            dimension=RiskDimension.BIAS,
             level=RiskLevel.MEDIUM,
             description="test",
             status=ReviewStatus.IN_REVIEW,
@@ -124,7 +124,7 @@ class TestRiskFlag:
 
     def test_begin_review(self):
         flag = RiskFlag(
-            dimension=RiskDimension.TECHNICAL,
+            dimension=RiskDimension.FEASIBILITY,
             level=RiskLevel.MEDIUM,
             description="test",
         )
@@ -133,7 +133,7 @@ class TestRiskFlag:
 
     def test_mark_blocked(self):
         flag = RiskFlag(
-            dimension=RiskDimension.TECHNICAL,
+            dimension=RiskDimension.FEASIBILITY,
             level=RiskLevel.HIGH,
             description="test",
         )
@@ -155,7 +155,7 @@ class TestRiskFlag:
     def test_created_at_auto_set(self):
         before = datetime.now()
         flag = RiskFlag(
-            dimension=RiskDimension.COMMS,
+            dimension=RiskDimension.QUALITY,
             level=RiskLevel.LOW,
             description="test",
         )
@@ -238,12 +238,12 @@ class TestUseCaseContext:
 
     def test_is_blocked_with_critical_flag(self):
         ctx = self._make_context()
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.CRITICAL, "hard block")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.CRITICAL, "hard block")
         assert ctx.is_blocked() is True
 
     def test_not_blocked_medium_only(self):
         ctx = self._make_context()
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "needs review")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "needs review")
         assert ctx.is_blocked() is False
 
     def test_unblocked_after_resolve(self):
@@ -262,39 +262,41 @@ class TestUseCaseContext:
     def test_get_blockers(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "blocker1")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "info only")
-        ctx.flag_risk(RiskDimension.COMMS, RiskLevel.CRITICAL, "blocker2")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "info only")
+        ctx.flag_risk(RiskDimension.SAFETY, RiskLevel.CRITICAL, "blocker2")
         blockers = ctx.get_blockers()
         assert len(blockers) == 2
         assert all(b.is_blocking for b in blockers)
 
     def test_get_pending_reviews(self):
         ctx = self._make_context()
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "review me")
-        ctx.flag_risk(RiskDimension.COMMS, RiskLevel.LOW, "no review needed")
-        ctx.flag_risk(RiskDimension.TECHNICAL, RiskLevel.HIGH, "also review")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "review me")
+        ctx.flag_risk(RiskDimension.SAFETY, RiskLevel.LOW, "no review needed")
+        ctx.flag_risk(RiskDimension.FEASIBILITY, RiskLevel.HIGH, "also review")
         pending = ctx.get_pending_reviews()
         assert len(pending) == 2
 
     def test_get_reviewers_needed(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "issue")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "concern")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "concern")
         reviewers = ctx.get_reviewers_needed()
         assert len(reviewers) >= 2
         assert "VP Legal / Business Affairs" in reviewers
-        assert "Ethics Review Board" in reviewers
+        assert "Bias Review Board" in reviewers
 
     def test_risk_score(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "high legal")
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.LOW, "low legal")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "medium ethical")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "medium bias")
         scores = ctx.risk_score()
         assert scores["Legal / IP Ownership"] == 3  # HIGH
-        assert scores["Ethical / Bias / Safety"] == 2  # MEDIUM
-        assert scores["Communications / Public Perception"] == 0
-        assert scores["Technical Feasibility / Quality"] == 0
+        assert scores["Bias / Fairness"] == 2  # MEDIUM
+        assert scores["Safety / Harmful Output"] == 0
+        assert scores["Security / Model Integrity"] == 0
+        assert scores["Technical Feasibility"] == 0
+        assert scores["Output Quality"] == 0
 
     def test_risk_score_ignores_resolved(self):
         ctx = self._make_context()
@@ -306,7 +308,7 @@ class TestUseCaseContext:
     def test_get_flags_by_dimension(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "legal1")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "ethical1")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "bias1")
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.MEDIUM, "legal2")
         legal_flags = ctx.get_flags_by_dimension(RiskDimension.LEGAL_IP)
         assert len(legal_flags) == 2
@@ -314,7 +316,7 @@ class TestUseCaseContext:
     def test_get_flags_by_status(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "open1")
-        flag = ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "resolved")
+        flag = ctx.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "resolved")
         flag.resolve()
         open_flags = ctx.get_flags_by_status(ReviewStatus.OPEN)
         assert len(open_flags) == 1
@@ -322,15 +324,15 @@ class TestUseCaseContext:
     def test_get_flags_by_level(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "h1")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.HIGH, "h2")
-        ctx.flag_risk(RiskDimension.COMMS, RiskLevel.LOW, "l1")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.HIGH, "h2")
+        ctx.flag_risk(RiskDimension.SAFETY, RiskLevel.LOW, "l1")
         high_flags = ctx.get_flags_by_level(RiskLevel.HIGH)
         assert len(high_flags) == 2
 
     def test_max_risk_level(self):
         ctx = self._make_context()
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.LOW, "low")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.HIGH, "high")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.HIGH, "high")
         assert ctx.max_risk_level() == RiskLevel.HIGH
 
     def test_max_risk_level_empty(self):
@@ -341,7 +343,7 @@ class TestUseCaseContext:
         ctx = self._make_context()
         flag = ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.CRITICAL, "crit")
         flag.resolve()
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "low")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "low")
         assert ctx.max_risk_level() == RiskLevel.LOW
 
     def test_summary_contains_key_info(self):
@@ -354,7 +356,7 @@ class TestUseCaseContext:
 
     def test_summary_clear_when_no_blockers(self):
         ctx = self._make_context()
-        ctx.flag_risk(RiskDimension.COMMS, RiskLevel.LOW, "minor")
+        ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "minor")
         summary = ctx.summary()
         assert "CLEAR" in summary
 

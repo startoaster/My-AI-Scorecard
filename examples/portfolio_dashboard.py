@@ -28,7 +28,7 @@ def main():
         "Actor likeness rights unclear for AI-modified footage",
     )
     uc1.flag_risk(
-        RiskDimension.ETHICAL, RiskLevel.MEDIUM,
+        RiskDimension.BIAS, RiskLevel.MEDIUM,
         "AI may alter skin tones or facial features",
     )
     dashboard.register(uc1)
@@ -40,7 +40,7 @@ def main():
         tags=["color", "grading"],
     )
     uc2.flag_risk(
-        RiskDimension.TECHNICAL, RiskLevel.MEDIUM,
+        RiskDimension.FEASIBILITY, RiskLevel.MEDIUM,
         "Color model not validated on HDR10+ pipeline",
     )
     dashboard.register(uc2)
@@ -52,11 +52,11 @@ def main():
         tags=["script", "analysis", "NLP"],
     )
     uc3.flag_risk(
-        RiskDimension.COMMS, RiskLevel.CRITICAL,
-        "Writers' guild concerns about AI involvement in creative process",
+        RiskDimension.SECURITY, RiskLevel.CRITICAL,
+        "NLP model vulnerable to prompt injection in script fields",
     )
     uc3.flag_risk(
-        RiskDimension.ETHICAL, RiskLevel.HIGH,
+        RiskDimension.BIAS, RiskLevel.HIGH,
         "Potential bias in genre and demographic scoring",
     )
     dashboard.register(uc3)
@@ -72,7 +72,7 @@ def main():
         "Training data provenance needs audit",
     )
     uc4.flag_risk(
-        RiskDimension.TECHNICAL, RiskLevel.LOW,
+        RiskDimension.QUALITY, RiskLevel.LOW,
         "Resolution adequate for mid-ground but not hero shots",
     )
     dashboard.register(uc4)

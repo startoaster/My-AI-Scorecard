@@ -47,7 +47,7 @@ class TestEscalationPolicy:
         """A LOW flag open > 7 days should escalate to MEDIUM."""
         policy = EscalationPolicy()
         flag = RiskFlag(
-            dimension=RiskDimension.COMMS,
+            dimension=RiskDimension.SAFETY,
             level=RiskLevel.LOW,
             description="info flag",
             created_at=datetime.now() - timedelta(days=8),
@@ -60,7 +60,7 @@ class TestEscalationPolicy:
         """A HIGH flag open > 1 day should escalate to CRITICAL."""
         policy = EscalationPolicy()
         flag = RiskFlag(
-            dimension=RiskDimension.ETHICAL,
+            dimension=RiskDimension.BIAS,
             level=RiskLevel.HIGH,
             description="serious issue",
             created_at=datetime.now() - timedelta(days=2),
@@ -113,7 +113,7 @@ class TestEscalationPolicy:
         """NONE-level flags have no escalation rule."""
         policy = EscalationPolicy()
         flag = RiskFlag(
-            dimension=RiskDimension.TECHNICAL,
+            dimension=RiskDimension.FEASIBILITY,
             level=RiskLevel.NONE,
             description="no issue",
             created_at=datetime.now() - timedelta(days=30),
@@ -126,7 +126,7 @@ class TestEscalationPolicy:
         policy = EscalationPolicy()
         ctx = UseCaseContext(name="test")
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.MEDIUM, "stale")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "fresh")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "fresh")
 
         # Make the first flag old
         ctx.risk_flags[0].created_at = datetime.now() - timedelta(days=5)
@@ -159,7 +159,7 @@ class TestEscalationPolicy:
         ]
         policy = EscalationPolicy(rules=custom_rules)
         flag = RiskFlag(
-            dimension=RiskDimension.COMMS,
+            dimension=RiskDimension.SAFETY,
             level=RiskLevel.LOW,
             description="test",
             created_at=datetime.now() - timedelta(hours=2),

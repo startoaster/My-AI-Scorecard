@@ -33,19 +33,19 @@ def main():
     )
 
     ctx.flag_risk(
-        dimension=RiskDimension.ETHICAL,
+        dimension=RiskDimension.BIAS,
         level=RiskLevel.MEDIUM,
         description="AI may alter skin tones or facial features unintentionally",
     )
 
     ctx.flag_risk(
-        dimension=RiskDimension.COMMS,
+        dimension=RiskDimension.SECURITY,
         level=RiskLevel.LOW,
-        description="Fan community may have strong opinions on AI remastering",
+        description="Model checkpoint provenance needs verification",
     )
 
     ctx.flag_risk(
-        dimension=RiskDimension.TECHNICAL,
+        dimension=RiskDimension.FEASIBILITY,
         level=RiskLevel.MEDIUM,
         description="ControlNet vs LoRA approach not yet validated for this content type",
     )

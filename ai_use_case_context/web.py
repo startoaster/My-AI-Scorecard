@@ -803,10 +803,10 @@ def create_app() -> Flask:
             tags=["upscaling", "characters", "post-production"],
         )
         uc1.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "Character likenesses may trigger actor likeness rights")
-        uc1.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "AI may subtly alter skin tones or features")
-        uc1.flag_risk(RiskDimension.TECHNICAL, RiskLevel.LOW, "Output resolution capped at 4K")
-        f = uc1.flag_risk(RiskDimension.COMMS, RiskLevel.LOW, "Minor PR consideration for AI-enhanced shots")
-        f.resolve("Covered by standard AI disclosure in credits")
+        uc1.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "AI may subtly alter skin tones or features")
+        uc1.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "Output resolution capped at 4K")
+        f = uc1.flag_risk(RiskDimension.SECURITY, RiskLevel.LOW, "Model weights from public checkpoint — provenance verified")
+        f.resolve("Checkpoint hash validated against upstream release")
 
         # 2. AI Background Extension
         uc2 = UseCaseContext(
@@ -816,7 +816,7 @@ def create_app() -> Flask:
             tags=["generation", "backgrounds", "set-extension"],
         )
         uc2.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.MEDIUM, "Generated content may resemble copyrighted locations")
-        uc2.flag_risk(RiskDimension.TECHNICAL, RiskLevel.MEDIUM, "Temporal consistency across frames needs validation")
+        uc2.flag_risk(RiskDimension.FEASIBILITY, RiskLevel.MEDIUM, "Temporal consistency across frames needs validation")
 
         # 3. AI Voice Synthesis
         uc3 = UseCaseContext(
@@ -826,9 +826,9 @@ def create_app() -> Flask:
             tags=["voice", "synthesis", "ADR"],
         )
         uc3.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.CRITICAL, "Voice synthesis may violate SAG-AFTRA agreements")
-        uc3.flag_risk(RiskDimension.ETHICAL, RiskLevel.HIGH, "Consent and disclosure requirements for AI voices")
-        uc3.flag_risk(RiskDimension.COMMS, RiskLevel.HIGH, "Public backlash risk if AI voice use is perceived negatively")
-        uc3.flag_risk(RiskDimension.TECHNICAL, RiskLevel.MEDIUM, "Voice quality may not match production standards")
+        uc3.flag_risk(RiskDimension.SAFETY, RiskLevel.HIGH, "Model can generate harmful or misleading audio content")
+        uc3.flag_risk(RiskDimension.SECURITY, RiskLevel.HIGH, "Voice model vulnerable to adversarial input attacks")
+        uc3.flag_risk(RiskDimension.QUALITY, RiskLevel.MEDIUM, "Voice quality may not match production standards")
 
         # 4. AI Color Grading
         uc4 = UseCaseContext(
@@ -837,8 +837,8 @@ def create_app() -> Flask:
             workflow_phase="Color & Finishing",
             tags=["color", "grading", "finishing"],
         )
-        uc4.flag_risk(RiskDimension.TECHNICAL, RiskLevel.LOW, "AI suggestions are advisory only — colorist has final say")
-        f = uc4.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "Minimal bias concern for color palette suggestions")
+        uc4.flag_risk(RiskDimension.FEASIBILITY, RiskLevel.LOW, "AI suggestions are advisory only — colorist has final say")
+        f = uc4.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "Minimal bias concern for color palette suggestions")
         f.resolve("No human likeness involved — low risk confirmed")
 
         # 5. AI Script Analysis (stale flag for escalation demo)
@@ -848,7 +848,7 @@ def create_app() -> Flask:
             workflow_phase="Pre-Production",
             tags=["NLP", "script", "scheduling"],
         )
-        stale = uc5.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "Bias in scene complexity scoring")
+        stale = uc5.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "Bias in scene complexity scoring")
         stale.created_at = datetime.now() - timedelta(days=5)
 
         for uc in [uc1, uc2, uc3, uc4, uc5]:
@@ -859,7 +859,7 @@ def create_app() -> Flask:
         body += '<p>5 use cases with realistic risk flags have been loaded:</p><ul style="margin:12px 0 12px 20px">'
         body += '<li><strong>AI Upscaling - Hero Shots</strong> — 1 blocker (Legal/IP HIGH)</li>'
         body += '<li><strong>AI Background Extension</strong> — 2 flags, needs review</li>'
-        body += '<li><strong>AI Voice Synthesis - ADR</strong> — 4 flags, CRITICAL blocker</li>'
+        body += '<li><strong>AI Voice Synthesis - ADR</strong> — 4 flags, CRITICAL blocker (legal + safety + security)</li>'
         body += '<li><strong>AI Color Grading Assistant</strong> — clear, low risk</li>'
         body += '<li><strong>AI Script Analysis</strong> — stale flag (5 days old, will trigger escalation)</li>'
         body += '</ul>'

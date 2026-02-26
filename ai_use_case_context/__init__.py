@@ -3,11 +3,13 @@ AI Use Case Context Framework
 ==============================
 A generalizable governance model for AI-driven media production use cases.
 
-Provides flag, route, and block capabilities across four risk dimensions:
+Provides flag, route, and block capabilities across six core risk dimensions:
   - Legal / IP Ownership
-  - Ethical / Bias / Safety
-  - Communications / Public Perception
-  - Technical Feasibility / Quality
+  - Bias / Fairness
+  - Safety / Harmful Output
+  - Security / Model Integrity
+  - Technical Feasibility
+  - Output Quality
 
 Plus configurable security dimensions aligned with industry standards:
   - **TPN** (Trusted Partner Network / MPA Content Security)

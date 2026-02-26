@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-use-case-context"
-version = "1.0.0"
+version = "1.1.0"
 description = "A generalizable governance framework for AI-driven media production use cases"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}

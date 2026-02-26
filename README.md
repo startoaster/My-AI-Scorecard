@@ -1,8 +1,10 @@
 # AI Use Case Context Framework
 
-A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across four risk dimensions, designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
+A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — four built-in plus unlimited user-defined custom dimensions. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
 ## Risk Dimensions
+
+### Built-in Dimensions
 
 | Dimension | Scope |
 |-----------|-------|
@@ -10,6 +12,24 @@ A generalizable governance model for AI-driven media production use cases. Provi
 | **Ethical / Bias / Safety** | Bias in outputs, safety concerns, fairness |
 | **Communications / Public Perception** | Public backlash, guild concerns, brand risk |
 | **Technical Feasibility / Quality** | Model validation, pipeline compatibility, output quality |
+
+### Custom Dimensions
+
+Define your own risk dimensions to match your organization's governance needs:
+
+```python
+from ai_use_case_context import custom_dimension, UseCaseContext, RiskLevel
+
+FINANCIAL = custom_dimension("FINANCIAL", "Financial Risk")
+REGULATORY = custom_dimension("REGULATORY", "Regulatory Compliance")
+ENVIRONMENTAL = custom_dimension("ENV", "Environmental Impact")
+
+ctx = UseCaseContext(name="AI Data Pipeline")
+ctx.flag_risk(FINANCIAL, RiskLevel.HIGH, "Budget overrun likely")
+ctx.flag_risk(REGULATORY, RiskLevel.MEDIUM, "GDPR review required")
+```
+
+Custom dimensions work everywhere built-in dimensions do — routing tables, dashboards, serialization, the web UI, and escalation policies all discover and render them automatically.
 
 Each dimension is evaluated at five severity levels:
 
@@ -29,7 +49,13 @@ pip install -e .
 
 Requires Python 3.10+. No external dependencies for the core library.
 
-For development (tests):
+For the web dashboard:
+
+```bash
+pip install -e ".[web]"
+```
+
+For development (tests + web):
 
 ```bash
 pip install -e ".[dev]"
@@ -114,7 +140,9 @@ ctx.get_pending_reviews()                         # Flags needing review (MEDIUM
 ctx.get_reviewers_needed()                        # Deduplicated reviewer list
 ctx.risk_score()                                  # {dimension_label: max_level_value}
 ctx.max_risk_level()                              # Highest unresolved RiskLevel
+ctx.dimensions()                                  # All dimensions (built-in + custom with flags)
 ctx.get_flags_by_dimension(RiskDimension.LEGAL_IP)
+ctx.get_flags_by_dimension(FINANCIAL)             # Works with custom dimensions too
 ctx.get_flags_by_status(ReviewStatus.OPEN)
 ctx.get_flags_by_level(RiskLevel.HIGH)
 ```
@@ -151,6 +179,20 @@ custom_routing = {
     (RiskDimension.LEGAL_IP, RiskLevel.HIGH): "My Studio Legal Team",
 }
 ctx = UseCaseContext(name="...", routing_table=custom_routing)
+```
+
+Custom dimensions can also be routed:
+
+```python
+from ai_use_case_context import custom_dimension
+
+FINANCIAL = custom_dimension("FINANCIAL", "Financial Risk")
+
+routing = {
+    (FINANCIAL, RiskLevel.HIGH): "CFO",
+    (FINANCIAL, RiskLevel.CRITICAL): "CFO + Board",
+}
+ctx = UseCaseContext(name="...", routing_table=routing)
 ```
 
 ## Portfolio Dashboard
@@ -245,7 +287,103 @@ data = to_dict(ctx)
 restored = from_dict(data)
 ```
 
-All metadata, flag states, timestamps, and resolution notes are preserved through round-trips. Enums are serialized by name (e.g., `"CRITICAL"` not `4`), datetimes as ISO-8601 strings.
+All metadata, flag states, timestamps, and resolution notes are preserved through round-trips. Enums are serialized by name (e.g., `"CRITICAL"` not `4`), datetimes as ISO-8601 strings. Custom dimensions are preserved with their labels via a `dimension_label` field in the serialized output.
+
+## Web Dashboard
+
+A browser-based dashboard for running score reports and managing governance status interactively.
+
+### Launch
+
+```bash
+# Run directly
+python -m ai_use_case_context
+
+# Or with a custom port
+python -m ai_use_case_context.web --port 8080
+```
+
+Then visit `http://127.0.0.1:5000`. Click **Seed Demo Data** to load 5 sample use cases.
+
+### Pages
+
+| Route | Description |
+|-------|-------------|
+| `/` | Portfolio dashboard — KPI cards, risk heatmap, dimension overview, use case list |
+| `/scores` | Score reports — composite risk bars per use case, escalation alerts |
+| `/reviewers` | Reviewer workload — flags grouped by assigned reviewer |
+| `/use-case/<name>` | Use case detail — flag table with action buttons, score breakdown |
+| `/add-use-case` | Create a new use case |
+| `/seed` | Load 5 demo use cases with realistic risk flags |
+
+### Interactive Actions
+
+From each use case detail page you can:
+- **Begin Review** — move a flag to In Review
+- **Resolve** — mark a flag as resolved (unblocks workflow)
+- **Accept Risk** — acknowledge and allow workflow to proceed
+- **Add Flag** — create a new risk flag with dimension, level, and description
+- **Apply Escalations** — auto-escalate stale flags per the escalation policy
+
+### Python Integration
+
+The web dashboard shares state with the Python API. Changes made in either direction are immediately reflected.
+
+**Access the live dashboard from Python:**
+
+```python
+from ai_use_case_context.web import get_dashboard, set_dashboard
+
+# Read/modify the dashboard backing the web UI
+dashboard = get_dashboard()
+dashboard.register(my_use_case)
+
+# Or replace it entirely with your own
+set_dashboard(my_existing_dashboard)
+```
+
+**Subscribe to web events with hooks:**
+
+```python
+from ai_use_case_context.web import on, off
+
+@on("flag_resolved")
+def handle_resolve(use_case_name, flag_index, flag):
+    print(f"Resolved on {use_case_name}: {flag.description}")
+
+# Remove a specific hook
+off("flag_resolved", handle_resolve)
+
+# Remove all hooks for an event
+off("flag_resolved")
+```
+
+**Available events:**
+
+| Event | Callback Signature |
+|-------|--------------------|
+| `use_case_registered` | `(use_case: UseCaseContext)` |
+| `flag_added` | `(use_case_name: str, flag: RiskFlag)` |
+| `flag_resolved` | `(use_case_name: str, flag_index: int, flag: RiskFlag)` |
+| `flag_accepted` | `(use_case_name: str, flag_index: int, flag: RiskFlag)` |
+| `flag_review_started` | `(use_case_name: str, flag_index: int, flag: RiskFlag)` |
+| `escalation_applied` | `(use_case_name: str, count: int, results: list)` |
+| `dashboard_reset` | `()` |
+
+**Programmatic usage (e.g., embedding in another Flask app):**
+
+```python
+from ai_use_case_context.web import create_app, get_dashboard
+
+app = create_app()
+
+# Pre-populate with your data
+dashboard = get_dashboard()
+dashboard.register(use_case_1)
+dashboard.register(use_case_2)
+
+app.run(port=8080)
+```
 
 ## Examples
 
@@ -271,22 +409,26 @@ python -m examples.serialization_demo
 pytest
 ```
 
-83 tests covering core classes, dashboard aggregation, escalation policies, and serialization round-trips.
+157 tests covering core classes, custom dimensions, dashboard aggregation, escalation policies, serialization round-trips, web dashboard pages, interactive actions, and Python sync hooks.
 
 ## Project Structure
 
 ```
 ai_use_case_context/
   __init__.py          Public API exports
-  core.py              RiskDimension, RiskLevel, ReviewStatus, RiskFlag, UseCaseContext
+  __main__.py          CLI entry point (python -m ai_use_case_context)
+  core.py              RiskDimension, RiskLevel, ReviewStatus, RiskFlag, UseCaseContext, Dimension, custom_dimension
   dashboard.py         GovernanceDashboard, DimensionSummary
   escalation.py        EscalationPolicy, EscalationRule, EscalationResult
   serialization.py     to_dict, from_dict, to_json, from_json
+  web.py               Flask web dashboard, hooks, Python sync API
 tests/
-  test_core.py         Core class tests
-  test_dashboard.py    Dashboard aggregation tests
-  test_escalation.py   Escalation policy tests
-  test_serialization.py  Serialization round-trip tests
+  test_core.py              Core class tests
+  test_custom_dimensions.py Custom dimension tests across all layers
+  test_dashboard.py         Dashboard aggregation tests
+  test_escalation.py        Escalation policy tests
+  test_serialization.py     Serialization round-trip tests
+  test_web.py               Web dashboard, actions, hooks, and sync tests
 examples/
   basic_usage.py       Flag, route, block, resolve workflow
   portfolio_dashboard.py  Multi-use-case aggregation

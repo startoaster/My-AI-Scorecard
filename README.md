@@ -95,7 +95,7 @@ pip install -e ".[web]"
 python -m ai_use_case_context.web
 ```
 
-Then open [http://127.0.0.1:5000](http://127.0.0.1:5000). Click **"Load demo data"** on the dashboard to seed five realistic use cases.
+Then open [http://127.0.0.1:5000](http://127.0.0.1:5000). Click **"Seed Demo Data"** in the navigation bar to load five realistic use cases.
 
 ### Features
 
@@ -320,7 +320,7 @@ python -m examples.serialization_demo
 pytest
 ```
 
-83 tests covering core classes, dashboard aggregation, escalation policies, and serialization round-trips.
+118 tests covering core classes, dashboard aggregation, escalation policies, serialization round-trips, and the web dashboard.
 
 ## Project Structure
 

@@ -18,13 +18,14 @@ from ai_use_case_context.core import (
     ReviewStatus,
     RiskFlag,
     UseCaseContext,
+    DimensionType,
 )
 
 
 @dataclass
 class DimensionSummary:
     """Aggregated stats for a single risk dimension across all use cases."""
-    dimension: RiskDimension
+    dimension: DimensionType
     total_flags: int = 0
     open_flags: int = 0
     blocking_flags: int = 0
@@ -88,7 +89,18 @@ class GovernanceDashboard:
 
     # -- Per-dimension aggregation -----------------------------------------
 
-    def dimension_summary(self, dimension: RiskDimension) -> DimensionSummary:
+    def all_dimensions(self) -> list[DimensionType]:
+        """Return all dimensions across all use cases (built-in + custom)."""
+        seen: dict[str, DimensionType] = {}
+        for uc in self._use_cases.values():
+            for dim in uc.dimensions():
+                seen.setdefault(dim.name, dim)
+        # Ensure built-ins are always present even with no use cases
+        for dim in RiskDimension:
+            seen.setdefault(dim.name, dim)
+        return list(seen.values())
+
+    def dimension_summary(self, dimension: DimensionType) -> DimensionSummary:
         """Aggregate stats for a single dimension across all use cases."""
         summary = DimensionSummary(dimension=dimension)
         for uc in self._use_cases.values():
@@ -106,9 +118,9 @@ class GovernanceDashboard:
                     summary.max_level = flag.level
         return summary
 
-    def all_dimension_summaries(self) -> dict[RiskDimension, DimensionSummary]:
-        """Return DimensionSummary for every dimension."""
-        return {dim: self.dimension_summary(dim) for dim in RiskDimension}
+    def all_dimension_summaries(self) -> dict[DimensionType, DimensionSummary]:
+        """Return DimensionSummary for every dimension (built-in + custom)."""
+        return {dim: self.dimension_summary(dim) for dim in self.all_dimensions()}
 
     # -- Reviewer workload -------------------------------------------------
 
@@ -160,7 +172,7 @@ class GovernanceDashboard:
 
         # Per-dimension overview
         lines.append("Dimension overview:")
-        for dim in RiskDimension:
+        for dim in self.all_dimensions():
             ds = self.dimension_summary(dim)
             level_icon = {
                 RiskLevel.NONE: "✅",

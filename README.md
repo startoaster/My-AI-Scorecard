@@ -47,7 +47,7 @@ Each dimension is evaluated at five severity levels:
 pip install -e .
 ```
 
-Requires Python 3.10+. No external dependencies for the core library.
+Requires Python 3.9+. No external dependencies for the core library.
 
 For the web dashboard:
 

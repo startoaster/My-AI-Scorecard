@@ -30,7 +30,7 @@ def main():
         "Generated content may resemble copyrighted locations",
     )
     ctx.flag_risk(
-        RiskDimension.TECHNICAL, RiskLevel.LOW,
+        RiskDimension.QUALITY, RiskLevel.LOW,
         "Output resolution capped at 4K",
     )
 

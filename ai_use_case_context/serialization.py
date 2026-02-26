@@ -18,7 +18,6 @@ from ai_use_case_context.core import (
     RiskFlag,
     UseCaseContext,
     Dimension,
-    DEFAULT_ROUTING,
 )
 
 _DATETIME_FMT = "%Y-%m-%dT%H:%M:%S.%f"

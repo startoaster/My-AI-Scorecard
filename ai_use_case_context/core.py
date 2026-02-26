@@ -18,11 +18,13 @@ from typing import Optional, Union
 # ---------------------------------------------------------------------------
 
 class RiskDimension(Enum):
-    """The four built-in governance dimensions."""
+    """The six built-in governance dimensions."""
     LEGAL_IP = "Legal / IP Ownership"
-    ETHICAL = "Ethical / Bias / Safety"
-    COMMS = "Communications / Public Perception"
-    TECHNICAL = "Technical Feasibility / Quality"
+    BIAS = "Bias / Fairness"
+    SAFETY = "Safety / Harmful Output"
+    SECURITY = "Security / Model Integrity"
+    FEASIBILITY = "Technical Feasibility"
+    QUALITY = "Output Quality"
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, RiskDimension):
@@ -199,20 +201,30 @@ DEFAULT_ROUTING: dict[tuple[RiskDimension, RiskLevel], str] = {
     (RiskDimension.LEGAL_IP, RiskLevel.HIGH): "VP Legal / Business Affairs",
     (RiskDimension.LEGAL_IP, RiskLevel.CRITICAL): "General Counsel + C-Suite",
 
-    (RiskDimension.ETHICAL, RiskLevel.LOW): "Ethics Review Board",
-    (RiskDimension.ETHICAL, RiskLevel.MEDIUM): "Ethics Review Board",
-    (RiskDimension.ETHICAL, RiskLevel.HIGH): "VP Ethics / Policy",
-    (RiskDimension.ETHICAL, RiskLevel.CRITICAL): "C-Suite + External Ethics Advisor",
+    (RiskDimension.BIAS, RiskLevel.LOW): "Fairness Analyst",
+    (RiskDimension.BIAS, RiskLevel.MEDIUM): "Bias Review Board",
+    (RiskDimension.BIAS, RiskLevel.HIGH): "VP Ethics / Policy",
+    (RiskDimension.BIAS, RiskLevel.CRITICAL): "C-Suite + External Fairness Auditor",
 
-    (RiskDimension.COMMS, RiskLevel.LOW): "Comms Coordinator",
-    (RiskDimension.COMMS, RiskLevel.MEDIUM): "VP Communications",
-    (RiskDimension.COMMS, RiskLevel.HIGH): "VP Communications + PR Agency",
-    (RiskDimension.COMMS, RiskLevel.CRITICAL): "C-Suite + Crisis Communications",
+    (RiskDimension.SAFETY, RiskLevel.LOW): "Safety Analyst",
+    (RiskDimension.SAFETY, RiskLevel.MEDIUM): "Safety Review Board",
+    (RiskDimension.SAFETY, RiskLevel.HIGH): "VP Safety / Policy",
+    (RiskDimension.SAFETY, RiskLevel.CRITICAL): "C-Suite + External Safety Advisor",
 
-    (RiskDimension.TECHNICAL, RiskLevel.LOW): "Tech Lead",
-    (RiskDimension.TECHNICAL, RiskLevel.MEDIUM): "VFX Supervisor",
-    (RiskDimension.TECHNICAL, RiskLevel.HIGH): "VP Technology / CTO",
-    (RiskDimension.TECHNICAL, RiskLevel.CRITICAL): "CTO + External Technical Review",
+    (RiskDimension.SECURITY, RiskLevel.LOW): "Security Analyst",
+    (RiskDimension.SECURITY, RiskLevel.MEDIUM): "Security Engineer",
+    (RiskDimension.SECURITY, RiskLevel.HIGH): "CISO / VP Security",
+    (RiskDimension.SECURITY, RiskLevel.CRITICAL): "CISO + External Security Audit",
+
+    (RiskDimension.FEASIBILITY, RiskLevel.LOW): "Tech Lead",
+    (RiskDimension.FEASIBILITY, RiskLevel.MEDIUM): "VFX Supervisor",
+    (RiskDimension.FEASIBILITY, RiskLevel.HIGH): "VP Technology / CTO",
+    (RiskDimension.FEASIBILITY, RiskLevel.CRITICAL): "CTO + External Technical Review",
+
+    (RiskDimension.QUALITY, RiskLevel.LOW): "QA Lead",
+    (RiskDimension.QUALITY, RiskLevel.MEDIUM): "Department Supervisor",
+    (RiskDimension.QUALITY, RiskLevel.HIGH): "VP Production / Post",
+    (RiskDimension.QUALITY, RiskLevel.CRITICAL): "Executive Producer + Department Head",
 }
 
 

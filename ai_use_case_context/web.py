@@ -46,6 +46,20 @@ from ai_use_case_context.core import (
 )
 from ai_use_case_context.dashboard import GovernanceDashboard
 from ai_use_case_context.escalation import EscalationPolicy
+from ai_use_case_context.security import (
+    SecurityProfile,
+    security_profile,
+    apply_security_profile,
+    list_presets,
+    TPN_DIMENSIONS,
+    VFX_DIMENSIONS,
+    ENTERPRISE_DIMENSIONS,
+)
+from ai_use_case_context.governance_hooks import (
+    GovernanceEvent,
+    GovernanceEventType,
+    emit_governance_event,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +68,7 @@ from ai_use_case_context.escalation import EscalationPolicy
 
 _dashboard = GovernanceDashboard()
 _escalation_policy = EscalationPolicy()
+_security_profile: SecurityProfile | None = None
 
 # ---------------------------------------------------------------------------
 # Event hook system — keeps Python callers in sync with web actions
@@ -140,6 +155,23 @@ def set_escalation_policy(policy: EscalationPolicy) -> None:
     """Replace the escalation policy used by the web UI."""
     global _escalation_policy
     _escalation_policy = policy
+
+
+def get_security_profile() -> SecurityProfile | None:
+    """Return the active security profile, or None if none is set."""
+    return _security_profile
+
+
+def set_security_profile(profile: SecurityProfile | None) -> None:
+    """Set or clear the active security profile for the web UI."""
+    global _security_profile
+    _security_profile = profile
+    if profile is not None:
+        emit_governance_event(GovernanceEvent(
+            event_type=GovernanceEventType.SECURITY_PROFILE_APPLIED,
+            description=f"Security profile applied: {profile.presets}",
+            metadata={"presets": profile.presets},
+        ))
 
 # ---------------------------------------------------------------------------
 # HTML helpers
@@ -250,6 +282,7 @@ def _layout(title: str, body: str, active: str = "") -> str:
   <a href="/" class="{'active' if active == 'dashboard' else ''}">Dashboard</a>
   <a href="/scores" class="{'active' if active == 'scores' else ''}">Score Reports</a>
   <a href="/reviewers" class="{'active' if active == 'reviewers' else ''}">Reviewers</a>
+  <a href="/security" class="{'active' if active == 'security' else ''}">Security</a>
   <a href="/seed" class="{'active' if active == 'seed' else ''}">Seed Demo Data</a>
 </div></nav>
 <div class="container">{body}</div>
@@ -357,7 +390,7 @@ def create_app() -> Flask:
         for uc in ucs:
             risk_scores = uc.risk_score()
             total_score = sum(risk_scores.values())
-            max_possible = len(RiskDimension) * RiskLevel.CRITICAL.value
+            max_possible = len(uc.dimensions()) * RiskLevel.CRITICAL.value
 
             body += '<div class="section">'
             body += f'<h2><a href="/use-case/{_e(uc.name)}" style="color:inherit;text-decoration:none">{_e(uc.name)}</a></h2>'
@@ -493,8 +526,20 @@ def create_app() -> Flask:
         body += f'<form method="post" action="/use-case/{_e(name)}/add-flag">'
         body += '<div class="form-row">'
         body += '<div class="form-group"><label>Dimension</label><select name="dimension">'
+        # Collect all available dimensions: use-case dims + security profile dims
+        seen_dim_names: set[str] = set()
+        all_form_dims: list[tuple[str, str, str]] = []  # (name, value, group)
         for dim in uc.dimensions():
-            body += f'<option value="{dim.name}">{_e(dim.value)}</option>'
+            if dim.name not in seen_dim_names:
+                seen_dim_names.add(dim.name)
+                all_form_dims.append((dim.name, dim.value, ""))
+        if _security_profile:
+            for dim in _security_profile.dimensions:
+                if dim.name not in seen_dim_names:
+                    seen_dim_names.add(dim.name)
+                    all_form_dims.append((dim.name, dim.value, " [Security]"))
+        for dname, dval, dtag in all_form_dims:
+            body += f'<option value="{dname}">{_e(dval)}{dtag}</option>'
         body += '</select></div>'
         body += '<div class="form-group"><label>Level</label><select name="level">'
         for lvl in RiskLevel:
@@ -525,24 +570,51 @@ def create_app() -> Flask:
     def resolve_flag(name, idx):
         uc = _dashboard._use_cases.get(name)
         if uc and 0 <= idx < len(uc.risk_flags):
-            uc.risk_flags[idx].resolve("Resolved via web dashboard")
-            _emit("flag_resolved", name, idx, uc.risk_flags[idx])
+            flag = uc.risk_flags[idx]
+            flag.resolve("Resolved via web dashboard")
+            _emit("flag_resolved", name, idx, flag)
+            emit_governance_event(GovernanceEvent(
+                event_type=GovernanceEventType.FLAG_RESOLVED,
+                use_case_name=name,
+                dimension=flag.dimension.name,
+                level=flag.level.name,
+                description=flag.description,
+                actor="web_dashboard",
+            ))
         return redirect(url_for("use_case_detail", name=name, msg="Flag resolved"))
 
     @app.route("/use-case/<name>/flag/<int:idx>/accept", methods=["POST"])
     def accept_flag(name, idx):
         uc = _dashboard._use_cases.get(name)
         if uc and 0 <= idx < len(uc.risk_flags):
-            uc.risk_flags[idx].accept_risk("Risk accepted via web dashboard")
-            _emit("flag_accepted", name, idx, uc.risk_flags[idx])
+            flag = uc.risk_flags[idx]
+            flag.accept_risk("Risk accepted via web dashboard")
+            _emit("flag_accepted", name, idx, flag)
+            emit_governance_event(GovernanceEvent(
+                event_type=GovernanceEventType.FLAG_ACCEPTED,
+                use_case_name=name,
+                dimension=flag.dimension.name,
+                level=flag.level.name,
+                description=flag.description,
+                actor="web_dashboard",
+            ))
         return redirect(url_for("use_case_detail", name=name, msg="Risk accepted"))
 
     @app.route("/use-case/<name>/flag/<int:idx>/review", methods=["POST"])
     def review_flag(name, idx):
         uc = _dashboard._use_cases.get(name)
         if uc and 0 <= idx < len(uc.risk_flags):
-            uc.risk_flags[idx].begin_review()
-            _emit("flag_review_started", name, idx, uc.risk_flags[idx])
+            flag = uc.risk_flags[idx]
+            flag.begin_review()
+            _emit("flag_review_started", name, idx, flag)
+            emit_governance_event(GovernanceEvent(
+                event_type=GovernanceEventType.REVIEW_STARTED,
+                use_case_name=name,
+                dimension=flag.dimension.name,
+                level=flag.level.name,
+                description=flag.description,
+                actor="web_dashboard",
+            ))
         return redirect(url_for("use_case_detail", name=name, msg="Review started"))
 
     @app.route("/use-case/<name>/add-flag", methods=["POST"])
@@ -554,7 +626,11 @@ def create_app() -> Flask:
                 dim = RiskDimension[dim_name]
             except KeyError:
                 # Look up the custom dimension from the use case's known dims
-                dim = next((d for d in uc.dimensions() if d.name == dim_name), None)
+                # Also check security profile dimensions
+                all_known = list(uc.dimensions())
+                if _security_profile:
+                    all_known.extend(_security_profile.dimensions)
+                dim = next((d for d in all_known if d.name == dim_name), None)
                 if dim is None:
                     return redirect(url_for("use_case_detail", name=name))
             level = RiskLevel[request.form["level"]]
@@ -562,6 +638,14 @@ def create_app() -> Flask:
             if desc:
                 flag = uc.flag_risk(dim, level, desc)
                 _emit("flag_added", name, flag)
+                emit_governance_event(GovernanceEvent(
+                    event_type=GovernanceEventType.FLAG_RAISED,
+                    use_case_name=name,
+                    dimension=dim.name,
+                    level=level.name,
+                    description=desc,
+                    actor="web_dashboard",
+                ))
         return redirect(url_for("use_case_detail", name=name, msg="Flag added"))
 
     @app.route("/use-case/<name>/escalate", methods=["POST"])
@@ -571,6 +655,15 @@ def create_app() -> Flask:
             results = _escalation_policy.apply_escalations(uc)
             count = len(results)
             _emit("escalation_applied", name, count, results)
+            for r in results:
+                emit_governance_event(GovernanceEvent(
+                    event_type=GovernanceEventType.FLAG_ESCALATED,
+                    use_case_name=name,
+                    dimension=r.flag.dimension.name,
+                    level=r.escalate_to_level.name,
+                    description=r.message,
+                    actor="escalation_policy",
+                ))
             return redirect(url_for("use_case_detail", name=name, msg=f"{count} escalation(s) applied"))
         return redirect(url_for("use_case_detail", name=name))
 
@@ -603,10 +696,113 @@ def create_app() -> Flask:
         body += '<div style="margin-top:16px"><a class="btn" href="/">&larr; Back to Dashboard</a></div>'
         return _layout("Add Use Case", body)
 
+    # ---- Security profile management ------------------------------------
+
+    @app.route("/security", methods=["GET", "POST"])
+    def security_page():
+        global _security_profile
+        flash = ""
+
+        if request.method == "POST":
+            action = request.form.get("action", "")
+            if action == "apply":
+                selected = request.form.getlist("presets")
+                if selected:
+                    _security_profile = security_profile(*selected)
+                    # Apply to all existing use cases
+                    for uc in _dashboard.use_cases:
+                        apply_security_profile(uc, _security_profile)
+                    flash = _flash_html(
+                        f"Security profile applied: {', '.join(selected).upper()}. "
+                        f"Routing tables updated for {len(_dashboard.use_cases)} use case(s)."
+                    )
+                    emit_governance_event(GovernanceEvent(
+                        event_type=GovernanceEventType.SECURITY_PROFILE_APPLIED,
+                        description=f"Security profile applied via web: {selected}",
+                        actor="web_dashboard",
+                        metadata={"presets": selected},
+                    ))
+            elif action == "clear":
+                _security_profile = None
+                flash = _flash_html("Security profile cleared.")
+
+        body = f'{flash}<h1 style="margin-bottom:20px">Security Profiles</h1>'
+
+        # Current profile status
+        body += '<div class="section"><h2>Active Profile</h2>'
+        if _security_profile:
+            body += f'<p><strong>Presets:</strong> {_e(", ".join(p.upper() for p in _security_profile.presets))}</p>'
+            body += f'<p><strong>Dimensions:</strong> {len(_security_profile.dimensions)}</p>'
+            body += f'<p><strong>Routing entries:</strong> {len(_security_profile.routing)}</p>'
+            body += '<table><tr><th>Dimension</th><th>Source</th></tr>'
+            for dim in _security_profile.dimensions:
+                source = "TPN" if dim.name.startswith("TPN_") else "VFX" if dim.name.startswith("VFX_") else "Enterprise"
+                body += f'<tr><td>{_e(dim.value)}</td><td>{source}</td></tr>'
+            body += '</table>'
+            body += '<form method="post" style="margin-top:12px">'
+            body += '<input type="hidden" name="action" value="clear">'
+            body += '<button class="btn" style="color:#dc2626;border-color:#dc2626;cursor:pointer" type="submit">Clear Profile</button>'
+            body += '</form>'
+        else:
+            body += '<div class="empty">No security profile active. Apply one below.</div>'
+        body += '</div>'
+
+        # Apply profile form
+        body += '<div class="section"><h2>Apply Security Profile</h2>'
+        body += '<p style="color:var(--muted);margin-bottom:16px">Select one or more security preset packs. Dimensions and routing tables will be merged and applied to all use cases.</p>'
+        body += '<form method="post">'
+        body += '<input type="hidden" name="action" value="apply">'
+
+        for preset_name in list_presets():
+            label = preset_name.upper()
+            if preset_name == "tpn":
+                dims = TPN_DIMENSIONS
+                desc = "MPA Trusted Partner Network — content, physical, digital, asset, incident, personnel security"
+            elif preset_name == "vfx":
+                dims = VFX_DIMENSIONS
+                desc = "VFX pipeline — secure transfer, render isolation, workstation, cloud, data classification, vendor"
+            elif preset_name == "enterprise":
+                dims = ENTERPRISE_DIMENSIONS
+                desc = "Enterprise InfoSec — IAM, audit trail, data privacy, regulatory compliance, business continuity"
+            else:
+                dims = []
+                desc = "Custom preset"
+
+            checked = ""
+            if _security_profile and preset_name in _security_profile.presets:
+                checked = " checked"
+            body += f'<div style="margin-bottom:16px;padding:16px;border:1px solid var(--border);border-radius:8px">'
+            body += f'<label style="display:flex;align-items:center;gap:8px;cursor:pointer">'
+            body += f'<input type="checkbox" name="presets" value="{preset_name}"{checked}>'
+            body += f'<strong>{_e(label)}</strong></label>'
+            body += f'<p style="color:var(--muted);font-size:0.85rem;margin:8px 0 0 28px">{_e(desc)}</p>'
+            if dims:
+                body += '<div style="margin:8px 0 0 28px;display:flex;gap:6px;flex-wrap:wrap">'
+                for dim in dims:
+                    body += _badge(dim.value, "#1e293b", "#e2e8f0")
+                body += '</div>'
+            body += '</div>'
+
+        body += '<button class="btn btn-primary" type="submit" style="border:none;padding:8px 20px;color:#fff;cursor:pointer">Apply Selected</button>'
+        body += '</form></div>'
+
+        body += '<div style="margin-top:16px"><a class="btn" href="/">&larr; Back to Dashboard</a></div>'
+        return _layout("Security Profiles", body, active="security")
+
     # ---- Seed demo data --------------------------------------------------
 
-    @app.route("/seed")
+    @app.route("/seed", methods=["GET", "POST"])
     def seed():
+        if request.method == "GET":
+            body = '<h1 style="margin-bottom:20px">Seed Demo Data</h1>'
+            body += '<div class="section">'
+            body += '<p>This will <strong>replace all current data</strong> with 5 demo use cases.</p>'
+            body += '<form method="POST" style="margin-top:16px">'
+            body += '<button type="submit" class="btn btn-primary">Seed Demo Data</button>'
+            body += ' <a href="/" style="margin-left:12px">Cancel</a>'
+            body += '</form></div>'
+            return _layout("Seed Demo Data", body, active="seed")
+
         _dashboard._use_cases.clear()
 
         # 1. AI Upscaling - Hero Shots
@@ -617,10 +813,10 @@ def create_app() -> Flask:
             tags=["upscaling", "characters", "post-production"],
         )
         uc1.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "Character likenesses may trigger actor likeness rights")
-        uc1.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "AI may subtly alter skin tones or features")
-        uc1.flag_risk(RiskDimension.TECHNICAL, RiskLevel.LOW, "Output resolution capped at 4K")
-        f = uc1.flag_risk(RiskDimension.COMMS, RiskLevel.LOW, "Minor PR consideration for AI-enhanced shots")
-        f.resolve("Covered by standard AI disclosure in credits")
+        uc1.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "AI may subtly alter skin tones or features")
+        uc1.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "Output resolution capped at 4K")
+        f = uc1.flag_risk(RiskDimension.SECURITY, RiskLevel.LOW, "Model weights from public checkpoint — provenance verified")
+        f.resolve("Checkpoint hash validated against upstream release")
 
         # 2. AI Background Extension
         uc2 = UseCaseContext(
@@ -630,7 +826,7 @@ def create_app() -> Flask:
             tags=["generation", "backgrounds", "set-extension"],
         )
         uc2.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.MEDIUM, "Generated content may resemble copyrighted locations")
-        uc2.flag_risk(RiskDimension.TECHNICAL, RiskLevel.MEDIUM, "Temporal consistency across frames needs validation")
+        uc2.flag_risk(RiskDimension.FEASIBILITY, RiskLevel.MEDIUM, "Temporal consistency across frames needs validation")
 
         # 3. AI Voice Synthesis
         uc3 = UseCaseContext(
@@ -640,9 +836,9 @@ def create_app() -> Flask:
             tags=["voice", "synthesis", "ADR"],
         )
         uc3.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.CRITICAL, "Voice synthesis may violate SAG-AFTRA agreements")
-        uc3.flag_risk(RiskDimension.ETHICAL, RiskLevel.HIGH, "Consent and disclosure requirements for AI voices")
-        uc3.flag_risk(RiskDimension.COMMS, RiskLevel.HIGH, "Public backlash risk if AI voice use is perceived negatively")
-        uc3.flag_risk(RiskDimension.TECHNICAL, RiskLevel.MEDIUM, "Voice quality may not match production standards")
+        uc3.flag_risk(RiskDimension.SAFETY, RiskLevel.HIGH, "Model can generate harmful or misleading audio content")
+        uc3.flag_risk(RiskDimension.SECURITY, RiskLevel.HIGH, "Voice model vulnerable to adversarial input attacks")
+        uc3.flag_risk(RiskDimension.QUALITY, RiskLevel.MEDIUM, "Voice quality may not match production standards")
 
         # 4. AI Color Grading
         uc4 = UseCaseContext(
@@ -651,8 +847,8 @@ def create_app() -> Flask:
             workflow_phase="Color & Finishing",
             tags=["color", "grading", "finishing"],
         )
-        uc4.flag_risk(RiskDimension.TECHNICAL, RiskLevel.LOW, "AI suggestions are advisory only — colorist has final say")
-        f = uc4.flag_risk(RiskDimension.ETHICAL, RiskLevel.LOW, "Minimal bias concern for color palette suggestions")
+        uc4.flag_risk(RiskDimension.FEASIBILITY, RiskLevel.LOW, "AI suggestions are advisory only — colorist has final say")
+        f = uc4.flag_risk(RiskDimension.BIAS, RiskLevel.LOW, "Minimal bias concern for color palette suggestions")
         f.resolve("No human likeness involved — low risk confirmed")
 
         # 5. AI Script Analysis (stale flag for escalation demo)
@@ -662,7 +858,7 @@ def create_app() -> Flask:
             workflow_phase="Pre-Production",
             tags=["NLP", "script", "scheduling"],
         )
-        stale = uc5.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "Bias in scene complexity scoring")
+        stale = uc5.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "Bias in scene complexity scoring")
         stale.created_at = datetime.now() - timedelta(days=5)
 
         for uc in [uc1, uc2, uc3, uc4, uc5]:
@@ -673,7 +869,7 @@ def create_app() -> Flask:
         body += '<p>5 use cases with realistic risk flags have been loaded:</p><ul style="margin:12px 0 12px 20px">'
         body += '<li><strong>AI Upscaling - Hero Shots</strong> — 1 blocker (Legal/IP HIGH)</li>'
         body += '<li><strong>AI Background Extension</strong> — 2 flags, needs review</li>'
-        body += '<li><strong>AI Voice Synthesis - ADR</strong> — 4 flags, CRITICAL blocker</li>'
+        body += '<li><strong>AI Voice Synthesis - ADR</strong> — 4 flags, CRITICAL blocker (legal + safety + security)</li>'
         body += '<li><strong>AI Color Grading Assistant</strong> — clear, low risk</li>'
         body += '<li><strong>AI Script Analysis</strong> — stale flag (5 days old, will trigger escalation)</li>'
         body += '</ul>'

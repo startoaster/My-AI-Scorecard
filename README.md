@@ -1,6 +1,6 @@
 # AI Use Case Context Framework
 
-A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — four built-in plus unlimited user-defined custom dimensions. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
+A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
 ## Risk Dimensions
 
@@ -9,9 +9,11 @@ A generalizable governance model for AI-driven media production use cases. Provi
 | Dimension | Scope |
 |-----------|-------|
 | **Legal / IP Ownership** | Licensing, likeness rights, training data provenance |
-| **Ethical / Bias / Safety** | Bias in outputs, safety concerns, fairness |
-| **Communications / Public Perception** | Public backlash, guild concerns, brand risk |
-| **Technical Feasibility / Quality** | Model validation, pipeline compatibility, output quality |
+| **Bias / Fairness** | Bias in outputs, representation, demographic fairness |
+| **Safety / Harmful Output** | Harmful, misleading, or unsafe model outputs |
+| **Security / Model Integrity** | Model vulnerabilities, adversarial attacks, supply chain security |
+| **Technical Feasibility** | Pipeline compatibility, model validation, infrastructure readiness |
+| **Output Quality** | Visual/audio fidelity, resolution, production-grade quality standards |
 
 ### Custom Dimensions
 
@@ -169,7 +171,7 @@ ctx = UseCaseContext(
 
 ```python
 flag = ctx.flag_risk(
-    dimension=RiskDimension.ETHICAL,
+    dimension=RiskDimension.BIAS,
     level=RiskLevel.MEDIUM,
     description="AI may alter skin tones unintentionally",
     reviewer="",  # auto-assigned from routing table
@@ -213,9 +215,11 @@ When a risk is flagged without specifying a reviewer, one is auto-assigned from 
 | Dimension | LOW | MEDIUM | HIGH | CRITICAL |
 |-----------|-----|--------|------|----------|
 | **Legal/IP** | IP Coordinator | Legal Counsel | VP Legal / Business Affairs | General Counsel + C-Suite |
-| **Ethical** | Ethics Review Board | Ethics Review Board | VP Ethics / Policy | C-Suite + External Ethics Advisor |
-| **Comms** | Comms Coordinator | VP Communications | VP Communications + PR Agency | C-Suite + Crisis Communications |
-| **Technical** | Tech Lead | VFX Supervisor | VP Technology / CTO | CTO + External Technical Review |
+| **Bias** | Fairness Analyst | Bias Review Board | VP Ethics / Policy | C-Suite + External Fairness Auditor |
+| **Safety** | Safety Analyst | Safety Review Board | VP Safety / Policy | C-Suite + External Safety Advisor |
+| **Security** | Security Analyst | Security Engineer | CISO / VP Security | CISO + External Security Audit |
+| **Feasibility** | Tech Lead | VFX Supervisor | VP Technology / CTO | CTO + External Technical Review |
+| **Quality** | QA Lead | Department Supervisor | VP Production / Post | Executive Producer + Department Head |
 
 Override by passing a custom `routing_table` dict to `UseCaseContext`:
 
@@ -362,7 +366,8 @@ Then visit `http://127.0.0.1:5000` (or your custom port). Click **Seed Demo Data
 | `/reviewers` | Reviewer workload — flags grouped by assigned reviewer |
 | `/use-case/<name>` | Use case detail — flag table with action buttons, score breakdown |
 | `/add-use-case` | Create a new use case |
-| `/seed` | Load 5 demo use cases with realistic risk flags |
+| `/security` | Security profiles — apply TPN/VFX/Enterprise presets, manage active profile |
+| `/seed` | Load 5 demo use cases with realistic risk flags (GET shows confirmation, POST seeds) |
 
 ### Interactive Actions
 
@@ -451,13 +456,78 @@ python -m examples.escalation_demo
 python -m examples.serialization_demo
 ```
 
+## Security Dimension Presets
+
+Pre-built security dimension packs aligned with industry standards:
+
+```python
+from ai_use_case_context.security import security_profile, apply_security_profile
+
+# Combine TPN + VFX security dimensions
+profile = security_profile("tpn", "vfx")
+
+# Apply to a use case (merges routing tables)
+apply_security_profile(ctx, profile)
+
+# Now security dimensions auto-route like built-in ones
+ctx.flag_risk(TPN_CONTENT_SECURITY, RiskLevel.HIGH, "No watermarking")
+```
+
+| Preset | Dimensions | Aligned With |
+|--------|-----------|--------------|
+| **TPN** (6) | Content Security, Physical Security, Digital Security, Asset Management, Incident Response, Personnel Security | MPA Trusted Partner Network |
+| **VFX** (6) | Secure Transfer, Render Farm Isolation, Workstation Security, Cloud/Hybrid Security, Data Classification, Vendor Security | VFX platform best practices |
+| **Enterprise** (5) | Access Control (IAM), Audit Trail, Data Privacy (GDPR/CCPA), Regulatory Compliance, Business Continuity/DR | ISO 27001 / SOC 2 / NIST |
+
+Register your own presets:
+
+```python
+from ai_use_case_context.security import register_preset
+
+register_preset("studio_custom", MY_DIMS, MY_ROUTING)
+profile = security_profile("tpn", "studio_custom")
+```
+
+## Governance Hooks (Enterprise Integration)
+
+Open extension point for InfoSec, compliance, and audit systems:
+
+```python
+from ai_use_case_context.governance_hooks import (
+    GovernanceHook, register_hook, AuditLogger, ComplianceGate, NotificationBridge,
+)
+
+# Audit logger — records all governance events
+logger = AuditLogger()
+register_hook(logger)
+
+# Compliance gate — blocks on criteria failure
+gate = ComplianceGate()
+gate.add_criterion("no_critical", lambda e: e.level != "CRITICAL")
+passed, failed = gate.evaluate(event)
+
+# Notification bridge — forward to Slack/PagerDuty/SIEM
+bridge = NotificationBridge(
+    callback=lambda d: requests.post(WEBHOOK_URL, json=d),
+    event_filter=lambda e: e.level in ("HIGH", "CRITICAL"),
+)
+register_hook(bridge)
+
+# Or write your own
+class SIEMHook(GovernanceHook):
+    def on_flag_raised(self, event):
+        send_to_siem(event.to_dict())
+    def on_flag_escalated(self, event):
+        page_on_call(event)
+```
+
 ## Running Tests
 
 ```bash
 pytest
 ```
 
-157 tests covering core classes, custom dimensions, dashboard aggregation, escalation policies, serialization round-trips, web dashboard pages, interactive actions, and Python sync hooks.
+245 tests covering core classes, custom dimensions, security presets, governance hooks, dashboard aggregation, escalation policies, serialization round-trips, web dashboard pages, interactive actions, and Python sync hooks.
 
 ## Project Structure
 
@@ -469,18 +539,25 @@ ai_use_case_context/
   dashboard.py         GovernanceDashboard, DimensionSummary
   escalation.py        EscalationPolicy, EscalationRule, EscalationResult
   serialization.py     to_dict, from_dict, to_json, from_json
-  web.py               Flask web dashboard with event hooks
+  security.py          TPN/VFX/Enterprise security presets, SecurityProfile, preset registry
+  governance_hooks.py  GovernanceHook protocol, AuditLogger, ComplianceGate, NotificationBridge
+  web.py               Flask web dashboard, hooks, Python sync API
 tests/
-  test_core.py         Core class tests
-  test_dashboard.py    Dashboard aggregation tests
-  test_escalation.py   Escalation policy tests
-  test_serialization.py  Serialization round-trip tests
-  test_web.py          Web dashboard and event hook tests
+  test_core.py               Core class tests
+  test_custom_dimensions.py  Custom dimension tests across all layers
+  test_dashboard.py          Dashboard aggregation tests
+  test_escalation.py         Escalation policy tests
+  test_serialization.py      Serialization round-trip tests
+  test_web.py                Web dashboard, actions, hooks, and sync tests
+  test_security.py           Security preset and profile tests
+  test_governance_hooks.py   Governance hook protocol tests
+  test_web_security.py       Security profile web integration tests
 examples/
-  basic_usage.py       Flag, route, block, resolve workflow
-  portfolio_dashboard.py  Multi-use-case aggregation
-  escalation_demo.py   Stale flag auto-escalation
-  serialization_demo.py  JSON persistence
+  basic_usage.py            Flag, route, block, resolve workflow
+  portfolio_dashboard.py    Multi-use-case aggregation
+  escalation_demo.py        Stale flag auto-escalation
+  serialization_demo.py     JSON persistence
+  security_governance.py    TPN/VFX security + governance hooks demo
 ```
 
 ## License

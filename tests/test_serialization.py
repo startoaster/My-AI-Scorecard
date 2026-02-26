@@ -27,7 +27,7 @@ class TestSerialization:
             tags=["upscaling", "archival"],
         )
         ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "Likeness rights")
-        ctx.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "Skin tone concern")
+        ctx.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "Skin tone concern")
         # Resolve one flag
         ctx.risk_flags[1].resolve("Validated with test suite")
         return ctx

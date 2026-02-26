@@ -21,19 +21,19 @@ class TestGovernanceDashboard:
             workflow_phase="Element Regeneration",
         )
         uc1.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "Likeness rights")
-        uc1.flag_risk(RiskDimension.ETHICAL, RiskLevel.MEDIUM, "Skin tone concern")
+        uc1.flag_risk(RiskDimension.BIAS, RiskLevel.MEDIUM, "Skin tone concern")
 
         uc2 = UseCaseContext(
             name="AI Color Grading",
             workflow_phase="Post-Production",
         )
-        uc2.flag_risk(RiskDimension.TECHNICAL, RiskLevel.LOW, "Needs validation")
+        uc2.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "Needs validation")
 
         uc3 = UseCaseContext(
             name="AI Script Analysis",
             workflow_phase="Pre-Production",
         )
-        uc3.flag_risk(RiskDimension.COMMS, RiskLevel.CRITICAL, "Public backlash risk")
+        uc3.flag_risk(RiskDimension.SAFETY, RiskLevel.CRITICAL, "Harmful output risk")
 
         db.register(uc1)
         db.register(uc2)
@@ -70,7 +70,7 @@ class TestGovernanceDashboard:
         blocked = db.blocked_use_cases()
         names = [uc.name for uc in blocked]
         assert "AI Upscaling" in names  # HIGH legal flag
-        assert "AI Script Analysis" in names  # CRITICAL comms flag
+        assert "AI Script Analysis" in names  # CRITICAL safety flag
         assert "AI Color Grading" not in names
 
     def test_clear_use_cases(self):
@@ -104,7 +104,7 @@ class TestGovernanceDashboard:
     def test_all_dimension_summaries(self):
         db = self._make_dashboard()
         summaries = db.all_dimension_summaries()
-        assert len(summaries) == 4
+        assert len(summaries) == 6
         assert RiskDimension.LEGAL_IP in summaries
 
     def test_reviewer_workload(self):
@@ -112,8 +112,8 @@ class TestGovernanceDashboard:
         workload = db.reviewer_workload()
         # VP Legal should have work
         assert "VP Legal / Business Affairs" in workload
-        # Ethics Review Board should have work
-        assert "Ethics Review Board" in workload
+        # Bias Review Board should have work
+        assert "Bias Review Board" in workload
 
     def test_by_workflow_phase(self):
         db = self._make_dashboard()

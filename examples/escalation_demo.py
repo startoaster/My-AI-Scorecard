@@ -29,11 +29,11 @@ def main():
         "Training data licensing needs review",
     )
     ctx.flag_risk(
-        RiskDimension.ETHICAL, RiskLevel.LOW,
-        "Minor concern about color accuracy",
+        RiskDimension.BIAS, RiskLevel.LOW,
+        "Minor concern about color accuracy bias",
     )
     ctx.flag_risk(
-        RiskDimension.TECHNICAL, RiskLevel.HIGH,
+        RiskDimension.FEASIBILITY, RiskLevel.HIGH,
         "LoRA checkpoint not validated",
     )
 

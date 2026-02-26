@@ -22,7 +22,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+web = ["flask>=3.0"]
+dev = ["pytest>=7.0", "flask>=3.0"]
 
 [tool.setuptools.packages.find]
 include = ["ai_use_case_context*"]

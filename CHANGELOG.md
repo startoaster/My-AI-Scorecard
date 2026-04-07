@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0a2] - 2026-04-07
+
+### Added
+
+- **Compliance standards module** (`compliance.py`) — open-schema alignment with ISO/IEC 42001:2023 (AIMS, 25 Annex A controls), NIST AI RMF 1.0 + AI 600-1 (four-function mapping with composite scoring), EU AI Act (risk classification, GPAI obligations, gap identification), and MovieLabs OMC 2030 Vision (eight-principle alignment scoring). `evaluate_compliance()` produces scored results with gaps and recommendations.
+- **Data provenance module** (`provenance.py`) — source-level metadata with 13 capture methods, generation flags with confidence scores, transformation logs with input/output hashes, bi-temporal dataset versioning, human-readable provenance cards, and model collapse prevention guards with synthetic data caps. `evaluate_provenance()` scores lineage across six weighted areas.
+- **Vendor scorecard module** (`vendor_scorecard.py`) — six-dimension weighted evaluation (Data & Provenance 25%, Governance & Security 20%, Ethics & Compliance 20%, Technical Fit 15%, Commercial Terms 10%, Operating Model 10%), KBYUTS quantitative criteria, post-Thomson Reuters copyright risk assessment, vendor tier classification, and 15 essential vendor questions. `evaluate_vendor()` produces tier assignment with gaps and recommendations.
+- **Template helpers** — `iso42001_annex_a_controls()` (25 controls), `nist_ai_rmf_subcategories()` (19 subcategories), `essential_vendor_questions()` (15 questions).
+- **Usage guide** (`docs/governance-provenance-vendor-guide.md`) — 960-line guide with 18 Mermaid diagrams.
+- **Examples** — `governance_review.py` (module overview) and `vendor_engagement_review.py` (end-to-end VFX production scenario).
+- **81 new tests** (319 total) covering all three new modules.
+
 ## [2.0.0a1] - 2026-02-26
 
 ### Added

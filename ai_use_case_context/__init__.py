@@ -244,4 +244,4 @@ __all__ = [
     "essential_vendor_questions",
 ]
 
-__version__ = "2.0.0a1"
+__version__ = "2.0.0a2"

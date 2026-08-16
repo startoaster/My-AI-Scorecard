@@ -45,6 +45,137 @@ Each dimension is evaluated at five severity levels:
 | `HIGH` | 3 | **Blocks** the workflow until resolved |
 | `CRITICAL` | 4 | **Blocks** + escalates to senior leadership |
 
+## Authority Weighting
+
+Not every obligation carries the same force. A term written into an enforceable
+agreement is binding; a voluntary technical standard is not. Flags carry an
+`Authority` so that distinction survives into routing and clearance.
+
+| Authority | Meaning |
+|-----------|---------|
+| `STATUTE` | Legislation or regulation |
+| `BINDING_CONTRACT` | Enforceable agreement term |
+| `REGULATORY_GUIDANCE` | Agency or registry guidance |
+| `TECHNICAL_STANDARD` | Published voluntary standard |
+| `ADVOCACY` | Principles from a convening body |
+| `EMERGING` | In use but not formally published |
+| `UNSPECIFIED` | No source attributed (the default) |
+
+Flags from an enforceable source route to the role qualified to clear them —
+regardless of which dimension they surfaced under — and cannot be accepted
+without naming who cleared them:
+
+```python
+flag = ctx.flag_risk(
+    RiskDimension.LEGAL_IP, RiskLevel.HIGH,
+    "Performer likeness in generated output",
+    authority=Authority.BINDING_CONTRACT,
+)
+
+flag.accept_risk("looks fine")                     # raises ClearanceError
+flag.accept_risk("reviewed", cleared_by="Counsel")  # recorded
+```
+
+Terms defined differently by different bodies are held as conflicts rather than
+resolved to one reading:
+
+```python
+for conflict in default_lexicon().conflicts():
+    print(conflict.describe())
+# 'Digital Replica' is defined by 2 sources ...; wording and thresholds may differ.
+```
+
+## Capability Classification
+
+Two independent properties drive most governance questions: what a capability
+does to the media, and how much of the recipe the human supplies.
+
+| `TransformationClass` | `ControlMode` |
+|-----------------------|---------------|
+| `EXTRACTION` → `CONVERSION` → `ENHANCEMENT` → `REPAIR` → `MODIFICATION` → `SYNTHESIS` | `PRESET` → `PARAMETERIZED` → `CONDITIONED` → `COMPOSED` |
+
+Classification is **per region**, not per shot — one frame can carry a
+performer held to the recorded plate alongside a fully generated background,
+and those are not the same case. `FinalPixelRole` records whether the output
+reaches the delivered work; `LikenessPresence` records whether a performer is
+in it.
+
+Flags follow from the classification rather than being typed in, so two people
+describing the same workflow raise the same flags:
+
+```python
+profile = CapabilityProfile(name="Set extension")
+profile.add_region(RegionProfile(
+    region="set_extension",
+    transformation=TransformationClass.SYNTHESIS,
+    control=ControlMode.CONDITIONED,
+    final_pixel=FinalPixelRole.DELIVERED_FRAME,
+))
+profile.derive_flags(ctx)
+```
+
+Rules live in `DEFAULT_CAPABILITY_RULES` as data — inspect, reorder, or replace
+them by passing your own list to `derive_flags()`.
+
+Deliberately absent is classification by model architecture: the same
+architecture serves both metadata tagging and full scene generation, so it
+predicts very little about governance treatment.
+
+## Pipeline-Emitted Classification
+
+Where a pipeline records how tightly each region was held to its source
+material, classification can be derived from what actually ran instead of
+asserted on a form:
+
+```python
+record = PipelineRecord(stage="Shot 0100", primary_region="hero_actor")
+record.add_signal(GuidanceSignal(
+    region="hero_actor",
+    guidance_strength=0.97,          # 1.0 = fully constrained by the source
+    conditioning=["depth", "segmentation", "motion"],
+    region_specific=True,
+    likeness=LikenessPresence.PERFORMANCE,
+))
+record.to_capability_profile().derive_flags(ctx)
+```
+
+Thresholds are defaults, not measurements — calibrate them against your own
+pipeline via `DerivationThresholds`. They travel with the record, because the
+numbers are part of the finding.
+
+## Authorship Evidence
+
+No settled authority defines how much human contribution sustains copyright in
+a work incorporating AI output. This framework does not guess. It records what
+a human actually contributed, per region, so whoever does decide has evidence
+to evaluate:
+
+```python
+record = AuthorshipRecord.from_capability_profile(profile)
+record.undocumented_regions()   # generative regions with nothing recorded
+record.thin_evidence_regions()  # sparse — a reporting cut-off, not a threshold
+```
+
+`evidence_points` is a count of recorded contributions, not a score. It tells a
+reviewer how much there is to look at, and nothing about whether it is enough.
+
+## External Vocabularies
+
+Classification uses this project's own names. `VocabularyMapping` crosswalks
+them onto any external vocabulary without touching rules, routing, or storage:
+
+```python
+mapping = VocabularyMapping(name="some-body", version="1.0", terms={...})
+register_vocabulary(mapping)
+profile.to_external(mapping)
+```
+
+Our classes are split finely on purpose: where an external vocabulary merges
+two of ours, the crosswalk maps both onto its one term. Merging is always
+expressible after the fact; splitting is not. Unmapped members translate to
+`None` rather than falling back to our names, so a lossy crosswalk is visible
+instead of silently presenting our vocabulary as someone else's.
+
 ## Installation
 
 ```bash

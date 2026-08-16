@@ -24,6 +24,17 @@ Designed to integrate with PRD and taxonomy frameworks, including
 MovieLabs OMC-aligned production workflows.
 """
 
+from ai_use_case_context.authority import (
+    Authority,
+    AuthoritySource,
+    ClearanceError,
+    CLEARANCE_ROLE,
+    required_clearance_role,
+    TermDefinition,
+    TermConflict,
+    Lexicon,
+    default_lexicon,
+)
 from ai_use_case_context.core import (
     RiskDimension,
     RiskLevel,
@@ -34,6 +45,38 @@ from ai_use_case_context.core import (
     DimensionType,
     custom_dimension,
     DEFAULT_ROUTING,
+)
+from ai_use_case_context.vocabulary import (
+    VocabularyMapping,
+    register_vocabulary,
+    unregister_vocabulary,
+    get_vocabulary,
+    list_vocabularies,
+)
+from ai_use_case_context.capability import (
+    TransformationClass,
+    ControlMode,
+    FinalPixelRole,
+    LikenessPresence,
+    RegionProfile,
+    CapabilityRule,
+    CapabilityProfile,
+    DEFAULT_CAPABILITY_RULES,
+)
+from ai_use_case_context.pipeline_signals import (
+    OutputComposition,
+    DerivationThresholds,
+    DEFAULT_THRESHOLDS,
+    GuidanceSignal,
+    PipelineRecord,
+    derive_transformation,
+    derive_control_mode,
+    derive_final_pixel_role,
+    derive_region_profile,
+)
+from ai_use_case_context.authorship import (
+    AuthorshipEvidence,
+    AuthorshipRecord,
 )
 from ai_use_case_context.dashboard import GovernanceDashboard
 from ai_use_case_context.escalation import EscalationPolicy, EscalationResult
@@ -137,6 +180,44 @@ from ai_use_case_context.vendor_scorecard import (
 )
 
 __all__ = [
+    # Authority weighting
+    "Authority",
+    "AuthoritySource",
+    "ClearanceError",
+    "CLEARANCE_ROLE",
+    "required_clearance_role",
+    "TermDefinition",
+    "TermConflict",
+    "Lexicon",
+    "default_lexicon",
+    # External vocabulary mapping
+    "VocabularyMapping",
+    "register_vocabulary",
+    "unregister_vocabulary",
+    "get_vocabulary",
+    "list_vocabularies",
+    # Capability classification
+    "TransformationClass",
+    "ControlMode",
+    "FinalPixelRole",
+    "LikenessPresence",
+    "RegionProfile",
+    "CapabilityRule",
+    "CapabilityProfile",
+    "DEFAULT_CAPABILITY_RULES",
+    # Pipeline signal derivation
+    "OutputComposition",
+    "DerivationThresholds",
+    "DEFAULT_THRESHOLDS",
+    "GuidanceSignal",
+    "PipelineRecord",
+    "derive_transformation",
+    "derive_control_mode",
+    "derive_final_pixel_role",
+    "derive_region_profile",
+    # Authorship evidence
+    "AuthorshipEvidence",
+    "AuthorshipRecord",
     # Core governance
     "RiskDimension",
     "RiskLevel",

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Authority weighting** (`authority.py`) — `Authority` precedence enum (statute → binding contract → regulatory guidance → technical standard → advocacy → emerging), `AuthoritySource` attribution, and clearance gating. Flags from an enforceable source route to the qualified clearance role regardless of dimension, and `accept_risk()` raises `ClearanceError` unless a clearing party is named.
+- **Term lexicon and conflict detection** — `Lexicon` holds multiple definitions per term rather than resolving to one, and `conflicts()` reports terms whose definitions differ across bodies. Starter set in `default_lexicon()` covers terms that recur in production AI governance.
+- **Capability classification** (`capability.py`) — two independent ordered dimensions, `TransformationClass` and `ControlMode`, plus `FinalPixelRole` and `LikenessPresence`. Classification is **per region** via `RegionProfile`, so one frame can carry several governance cases. `CapabilityProfile.derive_flags()` raises flags from the classification using `DEFAULT_CAPABILITY_RULES`, which are data and can be inspected, reordered, or replaced.
+- **Pipeline signal derivation** (`pipeline_signals.py`) — `GuidanceSignal` and `PipelineRecord` convert recorded pipeline values into a capability profile, so governance metadata is emitted by the workflow rather than typed into a form. Cut points are configurable via `DerivationThresholds` and travel with the record.
+- **Authorship evidence records** (`authorship.py`) — `AuthorshipRecord` documents human contribution per region without determining sufficiency, since no source supplies that threshold. Reports undocumented and sparsely documented generative regions.
+- **External vocabulary mapping** (`vocabulary.py`) — `VocabularyMapping` crosswalks the classification enums onto any external vocabulary without changes to rules, routing, or storage. Unmapped members translate to `None` rather than falling back to our own names.
+- **121 new tests** (448 total, up from 327).
+
+### Fixed
+
+- **OMC expanded correctly** — `compliance.py` described MovieLabs OMC as "Open Media Cloud"; it is the **Ontology for Media Creation**.
+
+### Notes
+
+- `RiskFlag` gains `authority`, `source`, and `cleared_by`. All three default to unattributed, so existing flags, stored payloads, and `accept_risk()` calls behave exactly as before.
+
 ## [2.0.0a1] - 2026-02-26
 
 ### Added

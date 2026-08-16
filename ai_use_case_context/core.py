@@ -12,6 +12,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Union
 
+from ai_use_case_context.authority import (
+    Authority,
+    AuthoritySource,
+    ClearanceError,
+    required_clearance_role,
+)
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -129,7 +136,14 @@ class ReviewStatus(Enum):
 
 @dataclass
 class RiskFlag:
-    """A single risk flag attached to a use case."""
+    """A single risk flag attached to a use case.
+
+    ``authority`` records how much force the source behind this flag carries.
+    It defaults to ``UNSPECIFIED``, which behaves exactly as flags did before
+    authority existed. Flags attributed to an enforceable source (a binding
+    agreement or a statute) cannot be accepted without naming who cleared
+    them — see :meth:`accept_risk`.
+    """
     dimension: DimensionType
     level: RiskLevel
     description: str
@@ -138,6 +152,9 @@ class RiskFlag:
     resolution_notes: str = ""
     created_at: datetime = field(default_factory=datetime.now)
     resolved_at: Optional[datetime] = None
+    authority: Authority = Authority.UNSPECIFIED
+    source: Optional[AuthoritySource] = None
+    cleared_by: str = ""
 
     @property
     def is_blocking(self) -> bool:
@@ -161,10 +178,38 @@ class RiskFlag:
         self.resolution_notes = notes
         self.resolved_at = datetime.now()
 
-    def accept_risk(self, notes: str = ""):
-        """Acknowledge the risk and allow the workflow to proceed."""
+    @property
+    def requires_qualified_clearance(self) -> bool:
+        """True if this flag comes from an enforceable source.
+
+        Such a flag can be routed and recorded by the framework, but the
+        decision to proceed despite it belongs to someone with standing to
+        make it — not to the tool, and not to an unattributed actor.
+        """
+        return self.authority.is_enforceable
+
+    def accept_risk(self, notes: str = "", cleared_by: str = ""):
+        """Acknowledge the risk and allow the workflow to proceed.
+
+        Args:
+            notes:      Rationale for accepting.
+            cleared_by: Who accepted it. Required when the flag comes from an
+                        enforceable source.
+
+        Raises:
+            ClearanceError: If the flag requires qualified clearance and no
+                clearing party was named.
+        """
+        if self.requires_qualified_clearance and not cleared_by:
+            raise ClearanceError(
+                f"Flag from an enforceable source "
+                f"({self.authority.label}) cannot be accepted without an "
+                f"attributed reviewer. Required: "
+                f"{required_clearance_role(self.authority)}."
+            )
         self.status = ReviewStatus.ACCEPTED
         self.resolution_notes = notes
+        self.cleared_by = cleared_by
         self.resolved_at = datetime.now()
 
     def begin_review(self):
@@ -183,10 +228,14 @@ class RiskFlag:
             RiskLevel.HIGH: "🟠",
             RiskLevel.CRITICAL: "🔴",
         }.get(self.level, "⚪")
-        return (
+        base = (
             f"{icon} [{self.dimension.value}] {self.level.name}: "
             f"{self.description} ({self.status.value})"
         )
+        if self.authority is not Authority.UNSPECIFIED:
+            src = f" — {self.source}" if self.source else ""
+            base += f" ⟨{self.authority.label}{src}⟩"
+        return base
 
 
 # ---------------------------------------------------------------------------
@@ -272,23 +321,35 @@ class UseCaseContext:
         level: RiskLevel,
         description: str,
         reviewer: str = "",
+        authority: Authority = Authority.UNSPECIFIED,
+        source: Optional[AuthoritySource] = None,
     ) -> RiskFlag:
         """
         Flag a risk on this use case.
 
-        If no reviewer is provided, one is auto-assigned from the routing table.
+        If no reviewer is provided, one is auto-assigned. Flags from an
+        enforceable source route to the role required to clear that authority
+        rather than to the dimension's usual reviewer — a contract question
+        does not become a supervisor's call because it surfaced under the
+        Quality dimension.
+
         Returns the created RiskFlag so you can further manipulate it.
         """
         if not reviewer:
-            reviewer = self.routing_table.get(
-                (dimension, level), "Unassigned"
-            )
+            if authority.is_enforceable:
+                reviewer = required_clearance_role(authority)
+            else:
+                reviewer = self.routing_table.get(
+                    (dimension, level), "Unassigned"
+                )
 
         flag = RiskFlag(
             dimension=dimension,
             level=level,
             description=description,
             reviewer=reviewer,
+            authority=authority,
+            source=source,
         )
         self.risk_flags.append(flag)
         return flag
@@ -359,6 +420,30 @@ class UseCaseContext:
     def get_flags_by_level(self, level: RiskLevel) -> list[RiskFlag]:
         """Return all flags at a specific risk level."""
         return [f for f in self.risk_flags if f.level == level]
+
+    def get_enforceable_flags(self) -> list[RiskFlag]:
+        """Return unresolved flags backed by a binding agreement or statute.
+
+        These are the flags that cannot be cleared by the team that raised
+        them, so they are worth surfacing separately from severity.
+        """
+        return [
+            f for f in self.risk_flags
+            if f.requires_qualified_clearance
+            and f.status not in (ReviewStatus.RESOLVED, ReviewStatus.ACCEPTED)
+        ]
+
+    def max_authority(self) -> Authority:
+        """Return the highest authority across unresolved flags."""
+        unresolved = [
+            f for f in self.risk_flags
+            if f.status not in (ReviewStatus.RESOLVED, ReviewStatus.ACCEPTED)
+        ]
+        return max(
+            (f.authority for f in unresolved),
+            key=lambda a: a.value,
+            default=Authority.UNSPECIFIED,
+        )
 
     def max_risk_level(self) -> RiskLevel:
         """Return the highest unresolved risk level across all dimensions."""

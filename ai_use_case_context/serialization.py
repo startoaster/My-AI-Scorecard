@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
+from ai_use_case_context.authority import Authority, AuthoritySource
 from ai_use_case_context.core import (
     RiskDimension,
     RiskLevel,
@@ -45,6 +46,9 @@ def _flag_to_dict(flag: RiskFlag) -> dict[str, Any]:
         "resolution_notes": flag.resolution_notes,
         "created_at": _serialize_datetime(flag.created_at),
         "resolved_at": _serialize_datetime(flag.resolved_at),
+        "authority": flag.authority.name,
+        "source": flag.source.to_dict() if flag.source else None,
+        "cleared_by": flag.cleared_by,
     }
     # For custom dimensions, also store the label so we can restore it
     if isinstance(flag.dimension, Dimension):
@@ -72,6 +76,12 @@ def _flag_from_dict(data: dict[str, Any]) -> RiskFlag:
         resolution_notes=data.get("resolution_notes", ""),
         created_at=_deserialize_datetime(data["created_at"]) or datetime.now(),
         resolved_at=_deserialize_datetime(data.get("resolved_at")),
+        authority=Authority[data.get("authority", "UNSPECIFIED")],
+        source=(
+            AuthoritySource.from_dict(data["source"])
+            if data.get("source") else None
+        ),
+        cleared_by=data.get("cleared_by", ""),
     )
 
 

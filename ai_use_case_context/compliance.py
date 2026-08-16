@@ -7,7 +7,7 @@ AI governance with international standards:
   - **ISO/IEC 42001:2023** — AI Management System (AIMS)
   - **NIST AI RMF 1.0 / 600-1** — AI Risk Management Framework
   - **EU AI Act** — European AI regulation (effective Aug 2, 2025)
-  - **MovieLabs OMC** — Open Media Cloud production workflow standard
+  - **MovieLabs OMC** — Ontology for Media Creation production workflow standard
 
 All schemas use plain Python dataclasses with ``to_dict()`` / ``from_dict()``
 round-trip support, making them easy to serialize to JSON, YAML, or any
@@ -338,12 +338,12 @@ class EUAIActChecklist:
 
 
 # ---------------------------------------------------------------------------
-# MovieLabs OMC (Open Media Cloud) 2030 Vision
+# MovieLabs OMC (Ontology for Media Creation) 2030 Vision
 # ---------------------------------------------------------------------------
 
 @dataclass
 class MovieLabsOMCAlignment:
-    """MovieLabs Open Media Cloud alignment assessment.
+    """MovieLabs Ontology for Media Creation alignment assessment.
 
     Evaluates alignment with the MovieLabs 2030 Vision and OMC framework
     for cloud-based, software-defined production workflows.

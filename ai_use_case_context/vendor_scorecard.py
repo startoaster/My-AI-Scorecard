@@ -328,12 +328,17 @@ class VendorResult:
     """Result of a vendor scorecard evaluation.
 
     Attributes:
-        overall_score:    Weighted composite 0-100.
-        tier:             Vendor classification tier.
-        dimension_scores: Per-dimension weighted contributions.
-        gaps:             Identified gaps across all dimensions.
-        recommendations:  Actionable recommendations.
-        copyright_risk:   Copyright risk level (low/medium/high/critical).
+        overall_score:          Weighted composite 0-100.
+        tier:                   Vendor classification tier.
+        dimension_scores:       Per-dimension **raw** scores, 0-100, exactly as
+                                assessed. Not weighted — see
+                                ``weighted_contributions`` for the amounts that
+                                actually sum to ``overall_score``.
+        weighted_contributions: Per-dimension ``score * weight``. These sum to
+                                ``overall_score``.
+        gaps:                   Identified gaps across all dimensions.
+        recommendations:        Actionable recommendations.
+        copyright_risk:         Copyright risk level (low/medium/high/critical).
     """
     overall_score: float
     tier: VendorTier
@@ -342,12 +347,16 @@ class VendorResult:
     recommendations: list[str]
     copyright_risk: str = "unknown"
     assessed_at: datetime = field(default_factory=datetime.now)
+    weighted_contributions: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "overall_score": round(self.overall_score, 1),
             "tier": self.tier.value,
             "dimension_scores": {k: round(v, 1) for k, v in self.dimension_scores.items()},
+            "weighted_contributions": {
+                k: round(v, 1) for k, v in self.weighted_contributions.items()
+            },
             "gaps": self.gaps,
             "recommendations": self.recommendations,
             "copyright_risk": self.copyright_risk,
@@ -364,6 +373,27 @@ class VendorResult:
             recommendations=data["recommendations"],
             copyright_risk=data.get("copyright_risk", "unknown"),
             assessed_at=datetime.fromisoformat(data["assessed_at"]) if data.get("assessed_at") else datetime.now(),
+            weighted_contributions=data.get("weighted_contributions", {}),
+        )
+
+
+#: Tolerance for the weights-sum check, to absorb float representation error.
+WEIGHT_SUM_TOLERANCE = 0.001
+
+
+def _validate_weights(weights: dict[ScorecardDimension, float]) -> None:
+    """Raise if a weight table cannot produce a 0-100 composite."""
+    total = sum(weights.values())
+    if abs(total - 1.0) > WEIGHT_SUM_TOLERANCE:
+        raise ValueError(
+            f"Dimension weights must sum to 1.0, got {total:g}. "
+            f"A table summing to anything else produces a composite outside "
+            f"the 0-100 range that tiering assumes."
+        )
+    negative = [d.value for d, v in weights.items() if v < 0]
+    if negative:
+        raise ValueError(
+            f"Dimension weights must not be negative: {', '.join(negative)}"
         )
 
 
@@ -376,13 +406,20 @@ def evaluate_vendor(
 
     Args:
         scorecard:        The vendor scorecard to evaluate.
-        weights:          Optional custom dimension weights (must sum to 1.0).
+        weights:          Optional custom dimension weights. Must sum to 1.0 —
+                          this is now enforced rather than assumed.
         tier_thresholds:  Optional custom tier thresholds.
 
     Returns:
         A :class:`VendorResult` with overall score, tier, gaps, and recommendations.
+
+    Raises:
+        ValueError: If ``weights`` does not sum to 1.0. Without this check a
+            mis-specified table silently produces scores outside 0-100, which
+            then flow into tiering as though they were valid.
     """
     w = weights or DEFAULT_WEIGHTS
+    _validate_weights(w)
     thresholds = tier_thresholds or DEFAULT_TIER_THRESHOLDS
 
     gaps: list[str] = []
@@ -390,12 +427,14 @@ def evaluate_vendor(
 
     # Compute weighted score
     scores = scorecard.dimension_scores()
-    dim_contributions: dict[str, float] = {}
+    raw_scores: dict[str, float] = {}
+    contributions: dict[str, float] = {}
     overall = 0.0
     for dim, score in scores.items():
         weight = w.get(dim, 0)
         contribution = score * weight
-        dim_contributions[dim.value] = score
+        raw_scores[dim.value] = score
+        contributions[dim.value] = contribution
         overall += contribution
 
         # Identify dimension-level gaps
@@ -457,7 +496,8 @@ def evaluate_vendor(
     return VendorResult(
         overall_score=overall,
         tier=tier,
-        dimension_scores=dim_contributions,
+        dimension_scores=raw_scores,
+        weighted_contributions=contributions,
         gaps=gaps,
         recommendations=recommendations,
         copyright_risk=copyright_risk,

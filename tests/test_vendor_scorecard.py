@@ -351,3 +351,100 @@ class TestEssentialVendorQuestions:
         qs = essential_vendor_questions()
         for q in qs:
             assert q.question, f"Empty question for {q.question_id}"
+
+
+# ---------------------------------------------------------------------------
+# Weight validation and score reporting
+# ---------------------------------------------------------------------------
+
+class TestWeightValidation:
+    def _scorecard(self):
+        return VendorScorecard(
+            vendor_name="X", data_provenance=DimensionScore(score=100)
+        )
+
+    def test_weights_not_summing_to_one_are_rejected(self):
+        # Previously this silently returned a composite of 500 on a 0-100 scale.
+        bad = {d: 5.0 for d in ScorecardDimension}
+        with pytest.raises(ValueError) as exc:
+            evaluate_vendor(self._scorecard(), weights=bad)
+        assert "sum to 1.0" in str(exc.value)
+
+    def test_weights_summing_below_one_are_rejected(self):
+        low = {d: 0.05 for d in ScorecardDimension}
+        with pytest.raises(ValueError):
+            evaluate_vendor(self._scorecard(), weights=low)
+
+    def test_negative_weights_are_rejected(self):
+        weights = dict(DEFAULT_WEIGHTS)
+        weights[ScorecardDimension.DATA_PROVENANCE] = -0.25
+        weights[ScorecardDimension.OPERATING_MODEL] = 0.60
+        with pytest.raises(ValueError) as exc:
+            evaluate_vendor(self._scorecard(), weights=weights)
+        assert "negative" in str(exc.value)
+
+    def test_float_error_within_tolerance_is_accepted(self):
+        weights = {
+            ScorecardDimension.DATA_PROVENANCE: 0.1,
+            ScorecardDimension.GOVERNANCE_SECURITY: 0.2,
+            ScorecardDimension.ETHICS_COMPLIANCE: 0.2,
+            ScorecardDimension.TECHNICAL_FIT: 0.2,
+            ScorecardDimension.COMMERCIAL_TERMS: 0.2,
+            ScorecardDimension.OPERATING_MODEL: 0.1,
+        }
+        evaluate_vendor(self._scorecard(), weights=weights)
+
+    def test_defaults_still_pass_validation(self):
+        evaluate_vendor(self._scorecard())
+
+
+class TestScoreReporting:
+    def test_dimension_scores_are_raw_not_weighted(self):
+        sc = VendorScorecard(
+            vendor_name="Y", data_provenance=DimensionScore(score=80)
+        )
+        result = evaluate_vendor(sc)
+        assert result.dimension_scores["Data & Provenance"] == 80.0
+
+    def test_weighted_contributions_sum_to_overall(self):
+        sc = VendorScorecard(
+            vendor_name="Y",
+            data_provenance=DimensionScore(score=80),
+            governance_security=DimensionScore(score=60),
+            ethics_compliance=DimensionScore(score=40),
+            technical_fit=DimensionScore(score=90),
+            commercial_terms=DimensionScore(score=70),
+            operating_model=DimensionScore(score=50),
+        )
+        result = evaluate_vendor(sc)
+        assert abs(
+            sum(result.weighted_contributions.values()) - result.overall_score
+        ) < 0.001
+
+    def test_weighted_contribution_applies_the_weight(self):
+        sc = VendorScorecard(
+            vendor_name="Y", data_provenance=DimensionScore(score=80)
+        )
+        result = evaluate_vendor(sc)
+        # 80 * 0.25
+        assert result.weighted_contributions["Data & Provenance"] == 20.0
+
+    def test_contributions_round_trip(self):
+        sc = VendorScorecard(
+            vendor_name="Y", data_provenance=DimensionScore(score=80)
+        )
+        result = evaluate_vendor(sc)
+        restored = VendorResult.from_dict(result.to_dict())
+        assert restored.weighted_contributions["Data & Provenance"] == 20.0
+
+    def test_legacy_payload_without_contributions_loads(self):
+        legacy = {
+            "overall_score": 75.0,
+            "tier": "approved",
+            "dimension_scores": {"Data & Provenance": 80.0},
+            "gaps": [],
+            "recommendations": [],
+            "copyright_risk": "low",
+        }
+        restored = VendorResult.from_dict(legacy)
+        assert restored.weighted_contributions == {}

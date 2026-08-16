@@ -390,3 +390,61 @@ class TestDefaultRouting:
         for key, value in DEFAULT_ROUTING.items():
             assert isinstance(value, str)
             assert len(value) > 0
+
+
+# ---------------------------------------------------------------------------
+# Routing table configuration
+# ---------------------------------------------------------------------------
+
+class TestRoutingTableConfiguration:
+    def test_omitting_the_table_uses_defaults(self):
+        ctx = UseCaseContext(name="T")
+        flag = ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "d")
+        assert flag.reviewer == "QA Lead"
+
+    def test_empty_table_disables_automatic_assignment(self):
+        # An empty mapping means "assign nothing", which is a different
+        # instruction from "use the defaults".
+        ctx = UseCaseContext(name="T", routing_table={})
+        flag = ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "d")
+        assert ctx.routing_table == {}
+        assert flag.reviewer == "Unassigned"
+
+    def test_empty_table_still_allows_an_explicit_reviewer(self):
+        ctx = UseCaseContext(name="T", routing_table={})
+        flag = ctx.flag_risk(
+            RiskDimension.QUALITY, RiskLevel.LOW, "d", reviewer="Named Person"
+        )
+        assert flag.reviewer == "Named Person"
+
+    def test_partial_table_routes_only_what_it_covers(self):
+        ctx = UseCaseContext(
+            name="T",
+            routing_table={(RiskDimension.LEGAL_IP, RiskLevel.HIGH): "Counsel"},
+        )
+        covered = ctx.flag_risk(RiskDimension.LEGAL_IP, RiskLevel.HIGH, "a")
+        uncovered = ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "b")
+        assert covered.reviewer == "Counsel"
+        assert uncovered.reviewer == "Unassigned"
+
+    def test_context_does_not_share_the_global_default_table(self):
+        # Mutating one context's table must not reconfigure every other.
+        a = UseCaseContext(name="A")
+        b = UseCaseContext(name="B")
+        a.routing_table[(RiskDimension.QUALITY, RiskLevel.LOW)] = "Changed"
+        assert b.routing_table[(RiskDimension.QUALITY, RiskLevel.LOW)] == "QA Lead"
+        assert DEFAULT_ROUTING[
+            (RiskDimension.QUALITY, RiskLevel.LOW)
+        ] == "QA Lead"
+
+    def test_supplied_table_is_not_aliased(self):
+        supplied = {(RiskDimension.QUALITY, RiskLevel.LOW): "Original"}
+        ctx = UseCaseContext(name="T", routing_table=supplied)
+        ctx.routing_table[(RiskDimension.QUALITY, RiskLevel.LOW)] = "Changed"
+        assert supplied[(RiskDimension.QUALITY, RiskLevel.LOW)] == "Original"
+
+    def test_tags_are_not_aliased(self):
+        supplied = ["a"]
+        ctx = UseCaseContext(name="T", tags=supplied)
+        ctx.tags.append("b")
+        assert supplied == ["a"]

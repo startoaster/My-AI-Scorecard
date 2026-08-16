@@ -15,7 +15,6 @@ from ai_use_case_context.core import RiskDimension, RiskLevel, UseCaseContext
 from ai_use_case_context.intake import (
     ApprovalContext,
     ApprovalDecision,
-    ApprovalError,
     ApprovalSubject,
     BrandPresence,
     BusinessContext,
@@ -261,38 +260,47 @@ class TestApprovalDecision:
         assert not ApprovalDecision.REJECTED.is_approval
         assert not ApprovalDecision.PENDING.is_approval
 
-    def test_approval_requires_a_named_decider(self):
+    def test_approval_over_open_finding_is_recorded_not_refused(self):
+        # The organisation is entitled to decide this; the record must not
+        # lose the fact that it decided knowingly.
+        ctx = UseCaseContext(name="Test")
+        p = profile(
+            inputs=InputProfile(input_types=[InputType.PERFORMER_LIKENESS])
+        )
+        p.derive_flags(ctx)
+        p.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="X")
+        assert p.approval.decision is ApprovalDecision.APPROVED
+        assert p.approval.open_findings_at_decision
+        assert p.decision_was_contested()
+
+    def test_open_findings_snapshot_names_authority_and_severity(self):
+        ctx = UseCaseContext(name="Test")
+        p = profile(
+            inputs=InputProfile(input_types=[InputType.PERFORMER_LIKENESS])
+        )
+        p.derive_flags(ctx)
+        p.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="X")
+        entry = p.approval.open_findings_at_decision[0]
+        assert "Binding Contract" in entry
+        assert "HIGH" in entry
+
+    def test_uncontested_approval_records_nothing_outstanding(self):
         ctx = UseCaseContext(name="Test")
         p = profile()
-        with pytest.raises(ApprovalError):
-            p.record_decision(ctx, ApprovalDecision.APPROVED)
+        p.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="X")
+        assert p.approval.open_findings_at_decision == []
+        assert not p.decision_was_contested()
 
-    def test_approval_blocked_by_open_enforceable_finding(self):
+    def test_rejection_is_never_contested(self):
         ctx = UseCaseContext(name="Test")
         p = profile(
             inputs=InputProfile(input_types=[InputType.PERFORMER_LIKENESS])
         )
         p.derive_flags(ctx)
-        with pytest.raises(ApprovalError) as exc:
-            p.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="X")
-        assert "enforceable" in str(exc.value)
-        assert p.approval.decision is ApprovalDecision.PENDING
+        p.record_decision(ctx, ApprovalDecision.REJECTED)
+        assert not p.decision_was_contested()
 
-    def test_internal_testing_approval_is_also_gated(self):
-        # A narrower approval is still an approval.
-        ctx = UseCaseContext(name="Test")
-        p = profile(
-            inputs=InputProfile(input_types=[InputType.PERFORMER_LIKENESS])
-        )
-        p.derive_flags(ctx)
-        with pytest.raises(ApprovalError):
-            p.record_decision(
-                ctx,
-                ApprovalDecision.APPROVED_FOR_INTERNAL_TESTING,
-                decided_by="X",
-            )
-
-    def test_approval_allowed_once_cleared(self):
+    def test_approval_after_clearing(self):
         ctx = UseCaseContext(name="Test")
         p = profile(
             inputs=InputProfile(input_types=[InputType.PERFORMER_LIKENESS])
@@ -306,21 +314,13 @@ class TestApprovalDecision:
         assert p.approval.decision is ApprovalDecision.APPROVED_WITH_CONSTRAINTS
         assert p.approval.decided_at is not None
 
-    def test_rejection_is_never_gated(self):
-        ctx = UseCaseContext(name="Test")
-        p = profile(
-            inputs=InputProfile(input_types=[InputType.PERFORMER_LIKENESS])
-        )
-        p.derive_flags(ctx)
-        p.record_decision(ctx, ApprovalDecision.REJECTED)
-        assert p.approval.decision is ApprovalDecision.REJECTED
-
-    def test_non_enforceable_flags_do_not_block_approval(self):
+    def test_non_enforceable_flags_do_not_count_as_contested(self):
         ctx = UseCaseContext(name="Test")
         ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.HIGH, "ordinary")
         p = profile()
         p.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="X")
         assert p.approval.decision is ApprovalDecision.APPROVED
+        assert not p.decision_was_contested()
 
 
 class TestSerialization:

@@ -18,9 +18,11 @@ person judges severity directly. That still works and is still appropriate when
 a reviewer knows something the fields do not capture. But the fields should
 come first, because they are checkable and a severity judgment is not.
 
-:class:`ApprovalContext` also carries the decision itself. Approving a proposal
-while a finding from an enforceable source is still open is refused — the same
-principle that governs clearing an individual flag.
+:class:`ApprovalContext` also carries the decision itself, together with what
+was still outstanding when it was taken. The framework records that; it does
+not adjudicate it. Approving over an open finding is a call an organization is
+entitled to make, and the useful thing a governance record can do is preserve
+the fact that it was made knowingly.
 """
 
 from __future__ import annotations
@@ -177,13 +179,15 @@ class ApprovalDecision(Enum):
         )
 
 
-class ApprovalError(RuntimeError):
-    """Raised when a proposal is approved with enforceable findings open."""
-
-
 @dataclass
 class ApprovalContext:
-    """What is being requested, and what was decided."""
+    """What is being requested, and what was decided.
+
+    ``open_findings_at_decision`` records what was still outstanding when the
+    decision was taken. Approving over an open finding from an enforceable
+    source is a decision an organization is entitled to make; what matters
+    afterwards is that the record shows it was made knowingly.
+    """
     subject: ApprovalSubject = ApprovalSubject.WORKFLOW
     proposed_use: str = ""
     tools_in_scope: list[str] = field(default_factory=list)
@@ -193,6 +197,7 @@ class ApprovalContext:
     decision_notes: str = ""
     decided_by: str = ""
     decided_at: Optional[datetime] = None
+    open_findings_at_decision: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -207,6 +212,7 @@ class ApprovalContext:
             "decided_at": (
                 self.decided_at.isoformat() if self.decided_at else None
             ),
+            "open_findings_at_decision": list(self.open_findings_at_decision),
         }
 
     @classmethod
@@ -223,6 +229,9 @@ class ApprovalContext:
             decided_at=(
                 datetime.fromisoformat(data["decided_at"])
                 if data.get("decided_at") else None
+            ),
+            open_findings_at_decision=list(
+                data.get("open_findings_at_decision", [])
             ),
         )
 
@@ -555,37 +564,38 @@ class UseCaseProfile:
         decided_by: str = "",
         notes: str = "",
     ) -> ApprovalDecision:
-        """Record the outcome of a review.
+        """Record the outcome of a review, along with what was still open.
 
-        Approving while a finding from an enforceable source is still open is
-        refused. Rejecting, or returning the proposal to pending, is always
-        allowed — those never need a clearance the framework can check.
+        This records; it does not adjudicate. Approving over an outstanding
+        finding is a call an organization is entitled to make, and a library
+        that refused would only be telling reviewers they are wrong about
+        their own risk appetite. What the record must not do is lose the fact
+        that the decision was taken with findings open — so those are captured
+        on the approval context as
+        :attr:`ApprovalContext.open_findings_at_decision`.
 
-        Raises:
-            ApprovalError: If approving with unresolved enforceable findings,
-                or approving without naming who decided.
+        Use :meth:`decision_was_contested` afterwards to find approvals that
+        went ahead over an enforceable finding.
         """
-        if decision.is_approval:
-            if not decided_by:
-                raise ApprovalError(
-                    "An approval must name who decided."
-                )
-            open_enforceable = ctx.get_enforceable_flags()
-            if open_enforceable:
-                summary = ", ".join(
-                    f.authority.label for f in open_enforceable
-                )
-                raise ApprovalError(
-                    f"Cannot record '{decision.value}' while "
-                    f"{len(open_enforceable)} finding(s) from an enforceable "
-                    f"source remain open ({summary}). Resolve or clear them "
-                    f"first."
-                )
         self.approval.decision = decision
         self.approval.decided_by = decided_by
         self.approval.decision_notes = notes
         self.approval.decided_at = datetime.now()
+        self.approval.open_findings_at_decision = [
+            f"[{f.authority.label}] {f.level.name}: {f.description}"
+            for f in ctx.get_enforceable_flags()
+        ]
         return decision
+
+    def decision_was_contested(self) -> bool:
+        """True if an approval was recorded with enforceable findings open.
+
+        Not a verdict — a pointer to a decision worth being able to explain.
+        """
+        return (
+            self.approval.decision.is_approval
+            and bool(self.approval.open_findings_at_decision)
+        )
 
     # -- Serialization -----------------------------------------------------
 

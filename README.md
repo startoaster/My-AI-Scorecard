@@ -4,6 +4,23 @@
 
 A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
+## Documentation
+
+Full documentation lives in [`docs/`](docs/index.md).
+
+| | |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | One shot, end to end, in about ten minutes |
+| [Concepts](docs/concepts.md) | The model and the decisions behind it |
+| [Guides](docs/guides.md) | Task-oriented walkthroughs by role |
+| [Customising](docs/customising.md) | Your rules, routing, thresholds, vocabularies |
+| [Integration](docs/integration.md) | Events, hooks, persistence, dashboard |
+| [Limitations](docs/limitations.md) | What it deliberately does not do |
+| [Reference](docs/reference-rules.md) | All 41 rules and every vocabulary *(generated)* |
+
+The rest of this README is a feature overview. For anything task-shaped, the
+guides are the better starting point.
+
 ## Risk Dimensions
 
 ### Built-in Dimensions
@@ -61,9 +78,11 @@ agreement is binding; a voluntary technical standard is not. Flags carry an
 | `EMERGING` | In use but not formally published |
 | `UNSPECIFIED` | No source attributed (the default) |
 
-Flags from an enforceable source route to the role qualified to clear them —
-regardless of which dimension they surfaced under — and cannot be accepted
-without naming who cleared them:
+**The framework records; it does not adjudicate.** Whether a given person may
+accept a given finding depends on an organization's delegation of authority and
+its identity systems — neither of which a library can see, and a check here
+would be bypassed by assigning `status` directly. So acceptance is recorded,
+and the gaps are made findable:
 
 ```python
 flag = ctx.flag_risk(
@@ -72,8 +91,23 @@ flag = ctx.flag_risk(
     authority=Authority.BINDING_CONTRACT,
 )
 
-flag.accept_risk("looks fine")                     # raises ClearanceError
-flag.accept_risk("reviewed", cleared_by="Counsel")  # recorded
+flag.accept_risk("looks fine")                      # allowed, nobody named
+flag.accept_risk("reviewed", cleared_by="Counsel")  # attributed
+
+ctx.get_unattributed_acceptances()   # enforceable findings accepted anonymously
+```
+
+Organizations that want acceptance actually gated should express that in a
+`GovernanceHook`, where it sits under their control rather than in a library
+default. An organization's own routing table always wins; the authority's
+suggested clearance role fills only a gap the table has no entry for.
+
+Routing is configured per context. Omit `routing_table` for `DEFAULT_ROUTING`;
+pass an empty mapping to switch automatic assignment off entirely:
+
+```python
+UseCaseContext(name="X")                      # default routing
+UseCaseContext(name="X", routing_table={})    # nothing assigned automatically
 ```
 
 Terms defined differently by different bodies are held as conflicts rather than
@@ -176,16 +210,19 @@ intake.derive_flags(ctx, capability=profile)
 organization's judgment, and encoding a ranking would assert a hierarchy no
 source supplies. Express yours by overriding `RESTRICTED_IP_CLASSES`.
 
-Approvals are recorded through `record_decision()`, which refuses to approve a
-proposal while a finding from an enforceable source is still open:
+Approvals go through `record_decision()`, which captures what was still open
+when the call was made:
 
 ```python
 intake.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="Board")
-# ApprovalError: Cannot record 'Approved' while 2 finding(s) from an
-# enforceable source remain open ...
+intake.decision_was_contested()               # True if it went ahead over one
+intake.approval.open_findings_at_decision     # what was outstanding, verbatim
 ```
 
-Rejecting is never gated — that never needs a clearance the framework can check.
+Approving over an outstanding finding is a call an organization is entitled to
+make, and a framework that refused would only be telling reviewers they are
+wrong about their own risk appetite. What the record must not do is lose the
+fact that the decision was taken knowingly.
 
 ## Operational Characteristics
 
@@ -210,6 +247,24 @@ Rules key on the **pairing** of an operational fact with material sensitivity,
 because neither alone is decisive. Omit `ip_class` and the sensitivity-dependent
 rules stay silent rather than assuming the worst — guessing produces flags
 nobody can act on.
+
+## Governance Events
+
+Lifecycle events fire from the core API, not just the web dashboard. Raising,
+resolving, accepting, and starting review on a flag all emit a
+`GovernanceEvent`, so an `AuditLogger` or SIEM bridge sees the same picture
+whether a change came from the dashboard, a derivation rule, or a script:
+
+```python
+register_hook(AuditLogger())
+ctx.flag_risk(...)          # FLAG_RAISED
+flag.accept_risk("ok", cleared_by="Counsel", actor="web_dashboard")  # FLAG_ACCEPTED
+```
+
+Events carry the use case, dimension, level, authority, source, reviewer, and
+`cleared_by` in metadata — so an unattributed acceptance of an enforceable
+finding is visible in the audit trail even though nothing refused it. `actor`
+defaults to `"system"` and callers override it to say what drove the change.
 
 ## Tool and Model Sourcing
 

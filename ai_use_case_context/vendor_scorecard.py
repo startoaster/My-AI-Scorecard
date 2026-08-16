@@ -225,20 +225,32 @@ class CopyrightAssessment:
 
     @property
     def risk_level(self) -> str:
-        """Assess copyright risk level: low, medium, high, critical."""
-        critical_flags = [
-            self.competes_with_training_sources and not self.training_data_lawfully_obtained,
-            self.pending_litigation,
-        ]
+        """Assess copyright risk level: low, medium, high, critical.
+
+        Each high-severity fact stands on its own. An earlier version required
+        two of them before reporting "high", with the result that a vendor
+        whose training data was not confirmed as lawfully obtained — on its own
+        the most consequential fact here — reported as "low" so long as nothing
+        else was wrong.
+
+        The two EU fields deliberately do not affect this level. Whether they
+        matter depends on where the work is exploited, and this object carries
+        no jurisdiction; they are reported in :attr:`gaps` for a reviewer who
+        knows the answer.
+        """
+        if self.pending_litigation:
+            return "critical"
+        if self.competes_with_training_sources and not self.training_data_lawfully_obtained:
+            return "critical"
+
         high_flags = [
             not self.training_data_lawfully_obtained,
             not self.license_verification_documented,
             self.competes_with_training_sources,
         ]
-        if any(critical_flags):
-            return "critical"
-        if sum(high_flags) >= 2:
+        if any(high_flags):
             return "high"
+
         if not self.opt_out_compliance_process or not self.indemnification_for_ai_outputs:
             return "medium"
         return "low"
@@ -259,6 +271,19 @@ class CopyrightAssessment:
             gaps.append("AI tool competes with training data sources (Thomson Reuters risk)")
         if self.pending_litigation:
             gaps.append("Vendor has pending copyright litigation")
+        # Jurisdiction-dependent: reported so a reviewer who knows where the
+        # work is exploited can weigh them. They do not affect risk_level,
+        # which has no jurisdiction to weigh them against.
+        if not self.eu_dsm_article4_compliance:
+            gaps.append(
+                "EU DSM Directive Art. 4 compliance not confirmed "
+                "(relevant where the reservation regime applies)"
+            )
+        if not self.eu_training_data_summary_published:
+            gaps.append(
+                "Training data summary not published "
+                "(relevant to general-purpose AI transparency obligations)"
+            )
         return gaps
 
 
@@ -691,6 +716,25 @@ def _validate_weights(weights: dict[ScorecardDimension, float]) -> None:
         )
 
 
+def _validate_tier_thresholds(thresholds: dict[VendorTier, float]) -> None:
+    """Raise if a threshold map cannot classify every tier.
+
+    Tier lookup indexes this map directly, so a missing entry surfaces as a
+    KeyError from deep inside evaluation rather than as a problem with the
+    argument the caller passed.
+    """
+    missing = [
+        t.value for t in
+        (VendorTier.PREFERRED, VendorTier.APPROVED, VendorTier.CONDITIONAL)
+        if t not in thresholds
+    ]
+    if missing:
+        raise ValueError(
+            f"Tier thresholds must cover every classified tier. "
+            f"Missing: {', '.join(missing)}"
+        )
+
+
 def evaluate_vendor(
     scorecard: VendorScorecard,
     weights: Optional[dict[ScorecardDimension, float]] = None,
@@ -712,9 +756,17 @@ def evaluate_vendor(
             mis-specified table silently produces scores outside 0-100, which
             then flow into tiering as though they were valid.
     """
-    w = weights or DEFAULT_WEIGHTS
+    # `is None`, not a falsy check: an explicitly empty mapping is a
+    # mis-specification here rather than a valid configuration, so let it
+    # reach validation and fail loudly instead of being silently replaced by
+    # the defaults.
+    w = weights if weights is not None else DEFAULT_WEIGHTS
     _validate_weights(w)
-    thresholds = tier_thresholds or DEFAULT_TIER_THRESHOLDS
+    thresholds = (
+        tier_thresholds if tier_thresholds is not None
+        else DEFAULT_TIER_THRESHOLDS
+    )
+    _validate_tier_thresholds(thresholds)
 
     gaps: list[str] = []
     recommendations: list[str] = []

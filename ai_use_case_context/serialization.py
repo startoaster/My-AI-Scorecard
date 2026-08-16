@@ -49,6 +49,7 @@ def _flag_to_dict(flag: RiskFlag) -> dict[str, Any]:
         "authority": flag.authority.name,
         "source": flag.source.to_dict() if flag.source else None,
         "cleared_by": flag.cleared_by,
+        "use_case_name": flag.use_case_name,
     }
     # For custom dimensions, also store the label so we can restore it
     if isinstance(flag.dimension, Dimension):
@@ -82,6 +83,7 @@ def _flag_from_dict(data: dict[str, Any]) -> RiskFlag:
             if data.get("source") else None
         ),
         cleared_by=data.get("cleared_by", ""),
+        use_case_name=data.get("use_case_name", ""),
     )
 
 

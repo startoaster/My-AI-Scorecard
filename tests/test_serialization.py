@@ -153,7 +153,7 @@ class TestAuthoritySerialization:
         assert flag.authority is Authority.BINDING_CONTRACT
         assert flag.source.body == "Example Agreement"
         assert flag.source.citation == "Art. 5"
-        assert flag.requires_qualified_clearance
+        assert flag.is_from_enforceable_source
 
     def test_cleared_by_round_trips(self):
         from ai_use_case_context.authority import Authority

@@ -4,6 +4,23 @@
 
 A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
+## Documentation
+
+Full documentation lives in [`docs/`](docs/index.md).
+
+| | |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | One shot, end to end, in about ten minutes |
+| [Concepts](docs/concepts.md) | The model and the decisions behind it |
+| [Guides](docs/guides.md) | Task-oriented walkthroughs by role |
+| [Customising](docs/customising.md) | Your rules, routing, thresholds, vocabularies |
+| [Integration](docs/integration.md) | Events, hooks, persistence, dashboard |
+| [Limitations](docs/limitations.md) | What it deliberately does not do |
+| [Reference](docs/reference-rules.md) | All 41 rules and every vocabulary *(generated)* |
+
+The rest of this README is a feature overview. For anything task-shaped, the
+guides are the better starting point.
+
 ## Risk Dimensions
 
 ### Built-in Dimensions

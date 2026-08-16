@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two assessment inputs had no effect at all.** `eu_dsm_article4_compliance` and `eu_training_data_summary_published` influenced neither `risk_level` nor `gaps`. They now appear in `gaps`. They deliberately stay out of `risk_level`: whether they matter depends on where the work is exploited, and `CopyrightAssessment` carries no jurisdiction to weigh that against.
 - **`evaluate_vendor()` no longer silently replaces explicitly empty configuration.** An empty `weights` mapping now reaches validation and fails with the existing sum-to-1.0 error instead of being swapped for the defaults. Tier thresholds are validated too: an incomplete map previously surfaced as a `KeyError` from inside tier selection rather than as a problem with the argument passed in.
 
+### Documentation
+
+- **User documentation in [`docs/`](docs/index.md)** — getting started, concepts, task-oriented guides by role, customising, integration, and an explicit limitations page covering every boundary and why it is where it is.
+- **Reference documentation is generated from the code** by `scripts/gen_reference_docs.py`: all 41 default rules with their authority and severity, and every classification enum with its members. A hand-maintained copy of 41 rules would be wrong within a release.
+- **`scripts/check_doc_examples.py`** executes every Python block in the docs the way a reader following along would — each document's blocks share a namespace, in order — so a snippet that depends on something never shown fails in CI rather than in a reader's terminal.
+
 ### Notes
 
 - Enforcement belongs in a `GovernanceHook`, where an organization controls it, or in the host system. `ComplianceGate` already exists for exactly this.

@@ -45,6 +45,265 @@ Each dimension is evaluated at five severity levels:
 | `HIGH` | 3 | **Blocks** the workflow until resolved |
 | `CRITICAL` | 4 | **Blocks** + escalates to senior leadership |
 
+## Authority Weighting
+
+Not every obligation carries the same force. A term written into an enforceable
+agreement is binding; a voluntary technical standard is not. Flags carry an
+`Authority` so that distinction survives into routing and clearance.
+
+| Authority | Meaning |
+|-----------|---------|
+| `STATUTE` | Legislation or regulation |
+| `BINDING_CONTRACT` | Enforceable agreement term |
+| `REGULATORY_GUIDANCE` | Agency or registry guidance |
+| `TECHNICAL_STANDARD` | Published voluntary standard |
+| `ADVOCACY` | Principles from a convening body |
+| `EMERGING` | In use but not formally published |
+| `UNSPECIFIED` | No source attributed (the default) |
+
+Flags from an enforceable source route to the role qualified to clear them —
+regardless of which dimension they surfaced under — and cannot be accepted
+without naming who cleared them:
+
+```python
+flag = ctx.flag_risk(
+    RiskDimension.LEGAL_IP, RiskLevel.HIGH,
+    "Performer likeness in generated output",
+    authority=Authority.BINDING_CONTRACT,
+)
+
+flag.accept_risk("looks fine")                     # raises ClearanceError
+flag.accept_risk("reviewed", cleared_by="Counsel")  # recorded
+```
+
+Terms defined differently by different bodies are held as conflicts rather than
+resolved to one reading:
+
+```python
+for conflict in default_lexicon().conflicts():
+    print(conflict.describe())
+# 'Digital Replica' is defined by 2 sources ...; wording and thresholds may differ.
+```
+
+## Capability Classification
+
+Two independent properties drive most governance questions: what a capability
+does to the media, and how much of the recipe the human supplies.
+
+| `TransformationClass` | `ControlMode` |
+|-----------------------|---------------|
+| `EXTRACTION` → `CONVERSION` → `ENHANCEMENT` → `REPAIR` → `MODIFICATION` → `SYNTHESIS` | `PRESET` → `PARAMETERIZED` → `CONDITIONED` → `COMPOSED` |
+
+Classification is **per region**, not per shot — one frame can carry a
+performer held to the recorded plate alongside a fully generated background,
+and those are not the same case. `FinalPixelRole` records whether the output
+reaches the delivered work; `LikenessPresence` records whether a performer is
+in it.
+
+Flags follow from the classification rather than being typed in, so two people
+describing the same workflow raise the same flags:
+
+```python
+profile = CapabilityProfile(name="Set extension")
+profile.add_region(RegionProfile(
+    region="set_extension",
+    transformation=TransformationClass.SYNTHESIS,
+    control=ControlMode.CONDITIONED,
+    final_pixel=FinalPixelRole.DELIVERED_FRAME,
+))
+profile.derive_flags(ctx)
+```
+
+Rules live in `DEFAULT_CAPABILITY_RULES` as data — inspect, reorder, or replace
+them by passing your own list to `derive_flags()`.
+
+Deliberately absent is classification by model architecture: the same
+architecture serves both metadata tagging and full scene generation, so it
+predicts very little about governance treatment.
+
+## Pipeline-Emitted Classification
+
+Where a pipeline records how tightly each region was held to its source
+material, classification can be derived from what actually ran instead of
+asserted on a form:
+
+```python
+record = PipelineRecord(stage="Shot 0100", primary_region="hero_actor")
+record.add_signal(GuidanceSignal(
+    region="hero_actor",
+    guidance_strength=0.97,          # 1.0 = fully constrained by the source
+    conditioning=["depth", "segmentation", "motion"],
+    region_specific=True,
+    likeness=LikenessPresence.PERFORMANCE,
+))
+record.to_capability_profile().derive_flags(ctx)
+```
+
+Thresholds are defaults, not measurements — calibrate them against your own
+pipeline via `DerivationThresholds`. They travel with the record, because the
+numbers are part of the finding.
+
+## Use Case Intake
+
+A classification says what an operation does. It does not say whether doing it
+*here*, to *this* material, for *this* audience, is acceptable. `UseCaseProfile`
+carries those facts as structured fields across four groups — business context,
+approval context, inputs, outputs.
+
+The reason to structure them: **escalation triggers are combinations, not
+severities.** Real guidance reads "these inputs, producing this output, at this
+final-use potential, using this class of capability, are pre-approved; anything
+else escalates." As fields, that becomes executable.
+
+```python
+intake = UseCaseProfile(
+    business=BusinessContext(
+        visibility=ProjectVisibility.PUBLIC,
+        ip_class=IPClass.PRE_RELEASE_IP,
+        commercial_nature=CommercialNature.COMMERCIAL_RELEASE,
+    ),
+    approval=ApprovalContext(subject=ApprovalSubject.WORKFLOW),
+    inputs=InputProfile(
+        ip_class=IPClass.PRE_RELEASE_IP,
+        input_types=[InputType.TALENT_LIKENESS],
+    ),
+    outputs=OutputProfile(final_pixel=FinalPixelRole.DELIVERED_FRAME),
+)
+intake.derive_flags(ctx, capability=profile)
+```
+
+`IPClass` is deliberately **unordered** — which class is most restricted is an
+organization's judgment, and encoding a ranking would assert a hierarchy no
+source supplies. Express yours by overriding `RESTRICTED_IP_CLASSES`.
+
+Approvals are recorded through `record_decision()`, which refuses to approve a
+proposal while a finding from an enforceable source is still open:
+
+```python
+intake.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="Board")
+# ApprovalError: Cannot record 'Approved' while 2 finding(s) from an
+# enforceable source remain open ...
+```
+
+Rejecting is never gated — that never needs a clearance the framework can check.
+
+## Operational Characteristics
+
+Where the AI runs and what happens to the data. None of this is derivable from
+a capability classification: the same denoiser on-premises and in a vendor cloud
+raises different questions, while a denoiser and a video model deployed
+identically raise the same ones.
+
+```python
+operations = OperationalProfile(
+    deployment=Deployment(host=HostEnvironment.VENDOR_CLOUD, region="US"),
+    residency=DataResidency(custodian=Custodian.VENDOR),
+    collection=DataCollection(
+        customer_data=CollectionPolicy.COLLECTED_REQUIRED,
+        retention_period="indefinite",
+    ),
+)
+operations.derive_flags(ctx, ip_class=intake.inputs.ip_class)
+```
+
+Rules key on the **pairing** of an operational fact with material sensitivity,
+because neither alone is decisive. Omit `ip_class` and the sensitivity-dependent
+rules stay silent rather than assuming the worst — guessing produces flags
+nobody can act on.
+
+## Tool and Model Sourcing
+
+Where a tool and its models come from, recorded as facts with rules rather than
+scored dimensions: vendor profile and AI posture, packaging and **separability**,
+model provisioning and origin, training-data source types and **source
+commitment**.
+
+```python
+sourcing = SourcingProfile(
+    packaging=ToolPackaging(
+        packaging=Packaging.SAAS,
+        separability=Separability.NOT_SEPARABLE,
+    ),
+    training_data=TrainingDataProfile(
+        source_types=[TrainingDataSource.WEB_CRAWL],
+        commitment=SourceCommitment.NONE_STATED,
+    ),
+)
+sourcing.derive_flags(ctx)
+```
+
+Two fields carry more weight than their size suggests. **Separability** decides
+whether a restriction can be imposed technically or only asked for — user
+discretion is a policy, not a control, and both it and `NOT_SEPARABLE` flag.
+**Source commitment** decides whether an approval granted against today's
+training corpus survives its replacement.
+
+## Vendor and Provenance Findings
+
+`VendorScorecard` and `ProvenanceCard` reach the governance engine through
+`derive_flags()`, the same way everything else does.
+
+```python
+scorecard.derive_flags(ctx)          # copyright facts, unanswered questions
+card.derive_flags(ctx, guard)        # licence status, opt-out, synthetic share
+tier_from_flags(ctx)                 # VendorTier, non-compensatory
+```
+
+`tier_from_flags()` replaces the weighted composite for approval decisions.
+The composite is **compensatory** — strength in one dimension offsets a
+disqualifying failure in another. A vendor in active copyright litigation whose
+tool competes with its own training sources scores 95 and lands in `PREFERRED`,
+because `copyright_risk` was computed and never consulted by the tiering logic.
+The same vendor via `derive_flags()` is `NOT_APPROVED` and blocks.
+
+The tier reads authority and severity together: an enforceable finding always
+costs at least one tier and can never be averaged away, but a low-severity
+contract point that only needs confirming lands at `CONDITIONAL` rather than
+disqualifying the vendor outright.
+
+`evaluate_vendor()` is retained and still useful for comparing vendors on
+documentation quality. It is not a basis for approving one.
+
+`evaluate_provenance()` stays as-is, because a **coverage** score is a
+legitimate measurement — it counts how thoroughly lineage is documented, which
+is objective. That is a different question from risk: a fully documented
+dataset can still be unusable, and `provenance_complete` can be `True` on a
+card whose licence is known to be non-compliant. Use `derive_flags()` for the
+risk, `evaluate_provenance()` for the coverage.
+
+## Authorship Evidence
+
+No settled authority defines how much human contribution sustains copyright in
+a work incorporating AI output. This framework does not guess. It records what
+a human actually contributed, per region, so whoever does decide has evidence
+to evaluate:
+
+```python
+record = AuthorshipRecord.from_capability_profile(profile)
+record.undocumented_regions()   # generative regions with nothing recorded
+record.thin_evidence_regions()  # sparse — a reporting cut-off, not a threshold
+```
+
+`evidence_points` is a count of recorded contributions, not a score. It tells a
+reviewer how much there is to look at, and nothing about whether it is enough.
+
+## External Vocabularies
+
+Classification uses this project's own names. `VocabularyMapping` crosswalks
+them onto any external vocabulary without touching rules, routing, or storage:
+
+```python
+mapping = VocabularyMapping(name="some-body", version="1.0", terms={...})
+register_vocabulary(mapping)
+profile.to_external(mapping)
+```
+
+Our classes are split finely on purpose: where an external vocabulary merges
+two of ours, the crosswalk maps both onto its one term. Merging is always
+expressible after the fact; splitting is not. Unmapped members translate to
+`None` rather than falling back to our names, so a lossy crosswalk is visible
+instead of silently presenting our vocabulary as someone else's.
+
 ## Installation
 
 ```bash

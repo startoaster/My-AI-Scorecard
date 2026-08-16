@@ -1,9 +1,25 @@
 """
-AI vendor scorecard evaluation module.
+AI vendor assessment.
 
-Implements a six-dimension weighted scoring framework for evaluating
-AI vendors against current best practices in governance, provenance,
-ethics, and commercial terms.
+Vendor findings reach the governance engine through
+:meth:`VendorScorecard.derive_flags`, which turns recorded facts about a vendor
+into :class:`~ai_use_case_context.core.RiskFlag` objects carrying an
+:class:`~ai_use_case_context.authority.Authority`. Those flags route, block,
+and escalate like any other.
+
+Prefer that path over :func:`evaluate_vendor`. The weighted composite it
+produces is **compensatory** — a strong showing in one dimension offsets a
+disqualifying failure in another. Concretely, a vendor in active copyright
+litigation whose tool competes with its own training sources could score 95 and
+land in the ``PREFERRED`` tier, because ``copyright_risk`` was computed and then
+never consulted by the tiering logic. Some findings should not be averageable,
+which is what flags and :meth:`VendorScorecard.tier_from_flags` provide.
+
+:func:`evaluate_vendor` is retained for existing callers and still useful for
+comparing vendors on documentation quality. It is not a basis for approving
+one.
+
+Scoring dimensions (default weights) for the legacy composite:
 
 Scoring Dimensions (default weights):
   - **Data & Provenance** (25%) — training data transparency, lineage, license compliance
@@ -37,7 +53,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
+
+from ai_use_case_context.authority import Authority, AuthoritySource
+from ai_use_case_context.core import RiskDimension, RiskLevel
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ai_use_case_context.core import RiskFlag, UseCaseContext
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +340,278 @@ class VendorScorecard:
             ScorecardDimension.OPERATING_MODEL: self.operating_model.score,
         }
 
+    def unsatisfactory_questions(
+        self, dimension: Optional[ScorecardDimension] = None
+    ) -> list[VendorQuestion]:
+        """Questions the vendor has not answered satisfactorily.
+
+        An unanswered question and an unsatisfactory answer are the same thing
+        here: neither gives a reviewer anything to rely on.
+        """
+        return [
+            q for q in self.questions
+            if not q.satisfactory
+            and (dimension is None or q.dimension == dimension)
+        ]
+
+    def derive_flags(
+        self,
+        ctx: "UseCaseContext",
+        rules: Optional[list["VendorRule"]] = None,
+    ) -> list["RiskFlag"]:
+        """Raise flags on ``ctx`` for every rule matching this scorecard.
+
+        This is how a vendor assessment reaches the governance engine. Unlike
+        :func:`evaluate_vendor`, the findings here can block a use case, route
+        to a qualified reviewer, and require attributed clearance.
+
+        Returns the flags that were added.
+        """
+        active = DEFAULT_VENDOR_RULES if rules is None else rules
+        added: list["RiskFlag"] = []
+        for rule in active:
+            if not rule.applies(self):
+                continue
+            added.append(
+                ctx.flag_risk(
+                    dimension=rule.dimension,
+                    level=rule.level,
+                    description=rule.describe(self),
+                    authority=rule.authority,
+                    source=rule.source,
+                )
+            )
+        return added
+
+
+# ---------------------------------------------------------------------------
+# Flag derivation — the path into the governance engine
+# ---------------------------------------------------------------------------
+
+@dataclass
+class VendorRule:
+    """A rule that turns a recorded vendor fact into a risk flag.
+
+    ``applies`` receives the whole scorecard so a rule can read the copyright
+    assessment, the questionnaire, or the dimension scores together.
+    """
+    rule_id: str
+    title: str
+    applies: Callable[["VendorScorecard"], bool]
+    dimension: Any
+    level: RiskLevel
+    describe: Callable[["VendorScorecard"], str]
+    authority: Authority = Authority.UNSPECIFIED
+    source: Optional[AuthoritySource] = None
+
+
+_COPYRIGHT_LAW = AuthoritySource(
+    body="Copyright law",
+    authority=Authority.STATUTE,
+    citation="Applicable regime depends on where the work is exploited",
+)
+
+_EU_TDM_OPT_OUT = AuthoritySource(
+    body="EU DSM Directive",
+    authority=Authority.STATUTE,
+    citation="Article 4 text and data mining reservation",
+    jurisdiction="EU",
+)
+
+_EU_GPAI_TRANSPARENCY = AuthoritySource(
+    body="EU AI Act",
+    authority=Authority.STATUTE,
+    citation="General-purpose AI transparency obligations",
+    jurisdiction="EU",
+)
+
+_VENDOR_AGREEMENT = AuthoritySource(
+    body="Vendor agreement",
+    authority=Authority.BINDING_CONTRACT,
+    citation="Terms to be confirmed for this engagement",
+)
+
+
+def _has_copyright(sc: "VendorScorecard") -> bool:
+    return sc.copyright is not None
+
+
+DEFAULT_VENDOR_RULES: list[VendorRule] = [
+    VendorRule(
+        rule_id="VENDOR_PENDING_LITIGATION",
+        title="Vendor has pending copyright litigation",
+        applies=lambda sc: _has_copyright(sc) and sc.copyright.pending_litigation,
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.CRITICAL,
+        authority=Authority.STATUTE,
+        source=_COPYRIGHT_LAW,
+        describe=lambda sc: (
+            f"{sc.vendor_name} has pending copyright litigation. An adverse "
+            f"outcome can affect the availability of the tool and the status "
+            f"of work already produced with it."
+        ),
+    ),
+    VendorRule(
+        rule_id="TRAINING_DATA_NOT_LAWFULLY_OBTAINED",
+        title="Training data not confirmed as lawfully obtained",
+        applies=lambda sc: (
+            _has_copyright(sc)
+            and not sc.copyright.training_data_lawfully_obtained
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.CRITICAL,
+        authority=Authority.STATUTE,
+        source=_COPYRIGHT_LAW,
+        describe=lambda sc: (
+            f"{sc.vendor_name} has not confirmed that training data was "
+            f"lawfully obtained. This is upstream of every output the tool "
+            f"produces and cannot be cured downstream."
+        ),
+    ),
+    VendorRule(
+        rule_id="COMPETES_WITH_TRAINING_SOURCES",
+        title="Tool competes with the sources of its training data",
+        applies=lambda sc: (
+            _has_copyright(sc) and sc.copyright.competes_with_training_sources
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        authority=Authority.STATUTE,
+        source=_COPYRIGHT_LAW,
+        describe=lambda sc: (
+            f"{sc.vendor_name}'s tool competes with the sources of its "
+            f"training data. Market effect on the original is a live factor "
+            f"in fair-use analysis; weigh it with counsel."
+        ),
+    ),
+    VendorRule(
+        rule_id="LICENSE_VERIFICATION_UNDOCUMENTED",
+        title="Licence verification not documented",
+        applies=lambda sc: (
+            _has_copyright(sc)
+            and not sc.copyright.license_verification_documented
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        describe=lambda sc: (
+            f"{sc.vendor_name} has not documented licence verification for "
+            f"training data. Absent documentation there is nothing to produce "
+            f"if the chain of title is later questioned."
+        ),
+    ),
+    VendorRule(
+        rule_id="NO_OPT_OUT_PROCESS",
+        title="No rights-holder opt-out process",
+        applies=lambda sc: (
+            _has_copyright(sc) and not sc.copyright.opt_out_compliance_process
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.MEDIUM,
+        authority=Authority.STATUTE,
+        source=_EU_TDM_OPT_OUT,
+        describe=lambda sc: (
+            f"{sc.vendor_name} has no process for honouring rights-holder "
+            f"reservations from text and data mining. Relevant wherever the "
+            f"reservation regime applies."
+        ),
+    ),
+    VendorRule(
+        rule_id="NO_TRAINING_DATA_SUMMARY",
+        title="No published training data summary",
+        applies=lambda sc: (
+            _has_copyright(sc)
+            and not sc.copyright.eu_training_data_summary_published
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.MEDIUM,
+        authority=Authority.STATUTE,
+        source=_EU_GPAI_TRANSPARENCY,
+        describe=lambda sc: (
+            f"{sc.vendor_name} has not published a training data summary. "
+            f"Confirm whether the transparency obligation reaches this "
+            f"provider before relying on the tool in scope markets."
+        ),
+    ),
+    VendorRule(
+        rule_id="NO_OUTPUT_INDEMNIFICATION",
+        title="No indemnification for claims arising from outputs",
+        applies=lambda sc: (
+            _has_copyright(sc)
+            and not sc.copyright.indemnification_for_ai_outputs
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.MEDIUM,
+        authority=Authority.BINDING_CONTRACT,
+        source=_VENDOR_AGREEMENT,
+        describe=lambda sc: (
+            f"{sc.vendor_name} does not indemnify against copyright claims "
+            f"arising from outputs. Residual exposure sits with the "
+            f"production."
+        ),
+    ),
+    VendorRule(
+        rule_id="UNSATISFACTORY_SECURITY_RESPONSES",
+        title="Security questions answered unsatisfactorily",
+        applies=lambda sc: bool(sc.unsatisfactory_questions(
+            ScorecardDimension.GOVERNANCE_SECURITY
+        )),
+        dimension=RiskDimension.SECURITY,
+        level=RiskLevel.HIGH,
+        describe=lambda sc: (
+            "Unresolved security questions: "
+            + ", ".join(
+                q.question_id for q in sc.unsatisfactory_questions(
+                    ScorecardDimension.GOVERNANCE_SECURITY
+                )
+            )
+        ),
+    ),
+]
+
+
+def tier_from_flags(ctx: "UseCaseContext") -> VendorTier:
+    """Classify a vendor from the flags raised against it, not from an average.
+
+    Non-compensatory by construction: a disqualifying finding cannot be offset
+    by strength elsewhere, which is the failure mode of the weighted composite.
+    The ladder reads from the worst unresolved finding:
+
+      * any CRITICAL, or an enforceable finding at HIGH or above
+        → ``NOT_APPROVED``
+      * any HIGH, or an enforceable finding at any severity → ``CONDITIONAL``
+      * any MEDIUM → ``APPROVED``
+      * nothing above LOW → ``PREFERRED``
+
+    Authority and severity are read together rather than either alone.
+    Authority alone would disqualify a vendor over a low-severity contract
+    question that only needs confirming; severity alone would let a contract
+    breach sit at the same tier as a slow support queue. An enforceable
+    finding therefore always costs at least one tier and can never be
+    averaged away.
+
+    Because it reads live flag state, clearing or resolving findings moves the
+    tier — the classification and the clearance record cannot drift apart.
+
+    Pass the context the vendor flags were derived into.
+    """
+    enforceable = ctx.get_enforceable_flags()
+    worst = ctx.max_risk_level()
+    worst_enforceable = max(
+        (f.level for f in enforceable),
+        key=lambda level: level.value,
+        default=RiskLevel.NONE,
+    )
+
+    if worst is RiskLevel.CRITICAL:
+        return VendorTier.NOT_APPROVED
+    if worst_enforceable.value >= RiskLevel.HIGH.value:
+        return VendorTier.NOT_APPROVED
+    if worst is RiskLevel.HIGH or enforceable:
+        return VendorTier.CONDITIONAL
+    if worst is RiskLevel.MEDIUM:
+        return VendorTier.APPROVED
+    return VendorTier.PREFERRED
+
 
 # ---------------------------------------------------------------------------
 # Evaluation
@@ -328,12 +622,17 @@ class VendorResult:
     """Result of a vendor scorecard evaluation.
 
     Attributes:
-        overall_score:    Weighted composite 0-100.
-        tier:             Vendor classification tier.
-        dimension_scores: Per-dimension weighted contributions.
-        gaps:             Identified gaps across all dimensions.
-        recommendations:  Actionable recommendations.
-        copyright_risk:   Copyright risk level (low/medium/high/critical).
+        overall_score:          Weighted composite 0-100.
+        tier:                   Vendor classification tier.
+        dimension_scores:       Per-dimension **raw** scores, 0-100, exactly as
+                                assessed. Not weighted — see
+                                ``weighted_contributions`` for the amounts that
+                                actually sum to ``overall_score``.
+        weighted_contributions: Per-dimension ``score * weight``. These sum to
+                                ``overall_score``.
+        gaps:                   Identified gaps across all dimensions.
+        recommendations:        Actionable recommendations.
+        copyright_risk:         Copyright risk level (low/medium/high/critical).
     """
     overall_score: float
     tier: VendorTier
@@ -342,12 +641,16 @@ class VendorResult:
     recommendations: list[str]
     copyright_risk: str = "unknown"
     assessed_at: datetime = field(default_factory=datetime.now)
+    weighted_contributions: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "overall_score": round(self.overall_score, 1),
             "tier": self.tier.value,
             "dimension_scores": {k: round(v, 1) for k, v in self.dimension_scores.items()},
+            "weighted_contributions": {
+                k: round(v, 1) for k, v in self.weighted_contributions.items()
+            },
             "gaps": self.gaps,
             "recommendations": self.recommendations,
             "copyright_risk": self.copyright_risk,
@@ -364,6 +667,27 @@ class VendorResult:
             recommendations=data["recommendations"],
             copyright_risk=data.get("copyright_risk", "unknown"),
             assessed_at=datetime.fromisoformat(data["assessed_at"]) if data.get("assessed_at") else datetime.now(),
+            weighted_contributions=data.get("weighted_contributions", {}),
+        )
+
+
+#: Tolerance for the weights-sum check, to absorb float representation error.
+WEIGHT_SUM_TOLERANCE = 0.001
+
+
+def _validate_weights(weights: dict[ScorecardDimension, float]) -> None:
+    """Raise if a weight table cannot produce a 0-100 composite."""
+    total = sum(weights.values())
+    if abs(total - 1.0) > WEIGHT_SUM_TOLERANCE:
+        raise ValueError(
+            f"Dimension weights must sum to 1.0, got {total:g}. "
+            f"A table summing to anything else produces a composite outside "
+            f"the 0-100 range that tiering assumes."
+        )
+    negative = [d.value for d, v in weights.items() if v < 0]
+    if negative:
+        raise ValueError(
+            f"Dimension weights must not be negative: {', '.join(negative)}"
         )
 
 
@@ -376,13 +700,20 @@ def evaluate_vendor(
 
     Args:
         scorecard:        The vendor scorecard to evaluate.
-        weights:          Optional custom dimension weights (must sum to 1.0).
+        weights:          Optional custom dimension weights. Must sum to 1.0 —
+                          this is now enforced rather than assumed.
         tier_thresholds:  Optional custom tier thresholds.
 
     Returns:
         A :class:`VendorResult` with overall score, tier, gaps, and recommendations.
+
+    Raises:
+        ValueError: If ``weights`` does not sum to 1.0. Without this check a
+            mis-specified table silently produces scores outside 0-100, which
+            then flow into tiering as though they were valid.
     """
     w = weights or DEFAULT_WEIGHTS
+    _validate_weights(w)
     thresholds = tier_thresholds or DEFAULT_TIER_THRESHOLDS
 
     gaps: list[str] = []
@@ -390,12 +721,14 @@ def evaluate_vendor(
 
     # Compute weighted score
     scores = scorecard.dimension_scores()
-    dim_contributions: dict[str, float] = {}
+    raw_scores: dict[str, float] = {}
+    contributions: dict[str, float] = {}
     overall = 0.0
     for dim, score in scores.items():
         weight = w.get(dim, 0)
         contribution = score * weight
-        dim_contributions[dim.value] = score
+        raw_scores[dim.value] = score
+        contributions[dim.value] = contribution
         overall += contribution
 
         # Identify dimension-level gaps
@@ -457,7 +790,8 @@ def evaluate_vendor(
     return VendorResult(
         overall_score=overall,
         tier=tier,
-        dimension_scores=dim_contributions,
+        dimension_scores=raw_scores,
+        weighted_contributions=contributions,
         gaps=gaps,
         recommendations=recommendations,
         copyright_risk=copyright_risk,

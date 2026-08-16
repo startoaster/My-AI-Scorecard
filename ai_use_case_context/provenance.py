@@ -43,7 +43,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
+
+from ai_use_case_context.authority import Authority, AuthoritySource
+from ai_use_case_context.core import RiskDimension, RiskLevel
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ai_use_case_context.core import RiskFlag, UseCaseContext
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +320,12 @@ class ProvenanceCard:
 
     @property
     def provenance_complete(self) -> bool:
-        """True if provenance is considered complete for audit."""
+        """True if provenance is considered complete for audit.
+
+        Complete means *documented*, not *clean*. A card recording a source
+        whose licence is known to be non-compliant is complete and still
+        raises a critical finding — see :meth:`derive_flags`.
+        """
         if not self.sources:
             return False
         if self.generation_flag == GenerationFlag.UNKNOWN and self.generation_confidence < 0.8:
@@ -323,6 +334,39 @@ class ProvenanceCard:
             s.license_compliance != LicenseCompliance.UNKNOWN
             for s in self.sources
         )
+
+    def derive_flags(
+        self,
+        ctx: "UseCaseContext",
+        guard: Optional["ModelCollapseGuard"] = None,
+        rules: Optional[list["ProvenanceRule"]] = None,
+    ) -> list["RiskFlag"]:
+        """Raise flags on ``ctx`` for every rule matching this card.
+
+        This is how provenance reaches the governance engine.
+        :func:`evaluate_provenance` measures how thoroughly lineage is
+        *documented*, which is a real and separate question — a fully
+        documented dataset can still be unusable, and an undocumented one is
+        not automatically unlawful. Use this for the risk, that for the
+        coverage.
+
+        Returns the flags that were added.
+        """
+        active = DEFAULT_PROVENANCE_RULES if rules is None else rules
+        added: list["RiskFlag"] = []
+        for rule in active:
+            if not rule.applies(self, guard):
+                continue
+            added.append(
+                ctx.flag_risk(
+                    dimension=rule.dimension,
+                    level=rule.level,
+                    description=rule.describe(self, guard),
+                    authority=rule.authority,
+                    source=rule.source,
+                )
+            )
+        return added
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +427,152 @@ class ModelCollapseGuard:
                 "Unknown-provenance content in high-stakes domain requires strict review"
             )
         return issues
+
+
+# ---------------------------------------------------------------------------
+# Flag derivation — the path into the governance engine
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ProvenanceRule:
+    """A rule that turns a recorded provenance fact into a risk flag.
+
+    ``applies`` receives the card and the model collapse guard, which may be
+    ``None`` when no guard is configured.
+    """
+    rule_id: str
+    title: str
+    applies: Callable[["ProvenanceCard", Optional["ModelCollapseGuard"]], bool]
+    dimension: Any
+    level: RiskLevel
+    describe: Callable[["ProvenanceCard", Optional["ModelCollapseGuard"]], str]
+    authority: Authority = Authority.UNSPECIFIED
+    source: Optional[AuthoritySource] = None
+
+
+_LICENCE_TERMS = AuthoritySource(
+    body="Source licence terms",
+    authority=Authority.BINDING_CONTRACT,
+    citation="Terms vary by source; confirm per dataset",
+)
+
+_TDM_RESERVATION = AuthoritySource(
+    body="Text and data mining reservation",
+    authority=Authority.STATUTE,
+    citation="Applicable regime depends on where mining occurred",
+)
+
+
+def _non_compliant_sources(card: "ProvenanceCard") -> list[DataSource]:
+    return [
+        s for s in card.sources
+        if s.license_compliance == LicenseCompliance.NON_COMPLIANT
+    ]
+
+
+def _unknown_licence_sources(card: "ProvenanceCard") -> list[DataSource]:
+    return [
+        s for s in card.sources
+        if s.license_compliance == LicenseCompliance.UNKNOWN
+    ]
+
+
+DEFAULT_PROVENANCE_RULES: list[ProvenanceRule] = [
+    ProvenanceRule(
+        rule_id="NON_COMPLIANT_LICENCE",
+        title="Source with a licence known to be non-compliant",
+        applies=lambda card, guard: bool(_non_compliant_sources(card)),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.CRITICAL,
+        authority=Authority.BINDING_CONTRACT,
+        source=_LICENCE_TERMS,
+        describe=lambda card, guard: (
+            "Sources with non-compliant licences: "
+            + ", ".join(s.name for s in _non_compliant_sources(card))
+            + ". A known breach is not a documentation gap and cannot be "
+              "cleared by documenting it."
+        ),
+    ),
+    ProvenanceRule(
+        rule_id="UNKNOWN_LICENCE_STATUS",
+        title="Source with unknown licence status",
+        applies=lambda card, guard: bool(_unknown_licence_sources(card)),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        describe=lambda card, guard: (
+            "Sources with unknown licence status: "
+            + ", ".join(s.name for s in _unknown_licence_sources(card))
+            + ". Determine status before this material is relied on."
+        ),
+    ),
+    ProvenanceRule(
+        rule_id="OPT_OUT_NOT_HONOURED",
+        title="Rights-holder reservation not honoured",
+        applies=lambda card, guard: card.has_opt_out_gaps,
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        authority=Authority.STATUTE,
+        source=_TDM_RESERVATION,
+        describe=lambda card, guard: (
+            "One or more sources with an identified copyright holder have no "
+            "record of a reservation being honoured."
+        ),
+    ),
+    ProvenanceRule(
+        rule_id="NO_SOURCES_DOCUMENTED",
+        title="No sources documented at all",
+        applies=lambda card, guard: not card.sources,
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        describe=lambda card, guard: (
+            f"'{card.dataset_name}' documents no sources. Nothing about its "
+            f"lineage can be asserted or checked."
+        ),
+    ),
+    ProvenanceRule(
+        rule_id="UNKNOWN_GENERATION_ORIGIN",
+        title="Content origin unknown",
+        applies=lambda card, guard: (
+            card.generation_flag is GenerationFlag.UNKNOWN
+            and card.generation_confidence < 0.8
+        ),
+        dimension=RiskDimension.QUALITY,
+        level=RiskLevel.MEDIUM,
+        describe=lambda card, guard: (
+            f"Origin of '{card.dataset_name}' is unclassified at "
+            f"{card.generation_confidence:.0%} confidence. Whether the "
+            f"material is human, machine, or mixed in origin is unresolved."
+        ),
+    ),
+    ProvenanceRule(
+        rule_id="SYNTHETIC_SHARE_OVER_CAP",
+        title="Synthetic content over the configured cap",
+        applies=lambda card, guard: guard is not None and not guard.within_limits,
+        dimension=RiskDimension.QUALITY,
+        level=RiskLevel.HIGH,
+        describe=lambda card, guard: (
+            f"Synthetic content is {guard.actual_synthetic_percentage:.0f}% "
+            f"against a cap of {guard.max_synthetic_percentage:.0f}%. "
+            f"Recursive training on generated material degrades quality in "
+            f"ways that are hard to detect downstream."
+        ),
+    ),
+    ProvenanceRule(
+        rule_id="NO_SYNTHETIC_DISCLOSURE_HIGH_STAKES",
+        title="No synthetic-content disclosure in a high-stakes domain",
+        applies=lambda card, guard: (
+            guard is not None
+            and guard.high_stakes_domain
+            and not guard.vendor_disclosure_received
+        ),
+        dimension=RiskDimension.QUALITY,
+        level=RiskLevel.HIGH,
+        describe=lambda card, guard: (
+            "This is a high-stakes domain and the vendor has not disclosed "
+            "synthetic data percentages, so the cap cannot be verified."
+        ),
+    ),
+]
 
 
 # ---------------------------------------------------------------------------

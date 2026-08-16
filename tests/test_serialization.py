@@ -123,3 +123,75 @@ class TestSerialization:
         assert restored.name == "Empty"
         assert restored.risk_flags == []
         assert restored.is_blocked() is False
+
+
+# ---------------------------------------------------------------------------
+# Authority attribution round-trips
+# ---------------------------------------------------------------------------
+
+class TestAuthoritySerialization:
+    def test_authority_and_source_round_trip(self):
+        from ai_use_case_context.authority import Authority, AuthoritySource
+        from ai_use_case_context.core import RiskDimension, RiskLevel, UseCaseContext
+        from ai_use_case_context.serialization import from_json, to_json
+
+        ctx = UseCaseContext(name="Test")
+        ctx.flag_risk(
+            RiskDimension.LEGAL_IP,
+            RiskLevel.HIGH,
+            "binding obligation",
+            authority=Authority.BINDING_CONTRACT,
+            source=AuthoritySource(
+                body="Example Agreement",
+                authority=Authority.BINDING_CONTRACT,
+                citation="Art. 5",
+                jurisdiction="US",
+            ),
+        )
+        restored = from_json(to_json(ctx))
+        flag = restored.risk_flags[0]
+        assert flag.authority is Authority.BINDING_CONTRACT
+        assert flag.source.body == "Example Agreement"
+        assert flag.source.citation == "Art. 5"
+        assert flag.requires_qualified_clearance
+
+    def test_cleared_by_round_trips(self):
+        from ai_use_case_context.authority import Authority
+        from ai_use_case_context.core import RiskDimension, RiskLevel, UseCaseContext
+        from ai_use_case_context.serialization import from_json, to_json
+
+        ctx = UseCaseContext(name="Test")
+        flag = ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.HIGH, "t",
+            authority=Authority.STATUTE,
+        )
+        flag.accept_risk("reviewed", cleared_by="Counsel")
+        restored = from_json(to_json(ctx))
+        assert restored.risk_flags[0].cleared_by == "Counsel"
+
+    def test_legacy_payload_without_authority_still_loads(self):
+        from ai_use_case_context.authority import Authority
+        from ai_use_case_context.serialization import from_dict
+
+        legacy = {
+            "name": "Old",
+            "description": "",
+            "workflow_phase": "",
+            "tags": [],
+            "created_at": "2026-01-01T00:00:00.000000",
+            "risk_flags": [
+                {
+                    "dimension": "LEGAL_IP",
+                    "level": "HIGH",
+                    "description": "d",
+                    "reviewer": "r",
+                    "status": "OPEN",
+                    "resolution_notes": "",
+                    "created_at": "2026-01-01T00:00:00.000000",
+                    "resolved_at": None,
+                }
+            ],
+        }
+        ctx = from_dict(legacy)
+        assert ctx.risk_flags[0].authority is Authority.UNSPECIFIED
+        assert ctx.risk_flags[0].source is None

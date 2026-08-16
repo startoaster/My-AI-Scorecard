@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the framework no longer refuses state transitions.** `RiskFlag.accept_risk()` and `UseCaseProfile.record_decision()` recorded facts and also *enforced* who could do what, which is neither this system's job nor something it can actually do — the checks were bypassable by assigning `status` directly, so they bought false assurance while blocking legitimate workflows. Both now record. `ClearanceError` and `ApprovalError` are removed, along with `CLEARANCE_ROLE` / `required_clearance_role()`.
+- **`RiskFlag.requires_qualified_clearance` renamed to `is_from_enforceable_source`** — it describes the finding, and never described a rule about who may act on it.
+- **An organization's routing table always wins.** `flag_risk()` previously bypassed the configured table entirely for findings from an enforceable source. It now consults the table first and falls back to `suggested_clearance_role()` only where the table has no entry, in place of leaving a flag unassigned.
+- **`SUGGESTED_CLEARANCE_ROLE` / `suggested_clearance_role()`** replace the old required-role table, and are documented as advisory routing hints that nothing checks.
+
+### Added
+
+- **Governance events fire from the core API.** `flag_risk()`, `resolve()`, `accept_risk()`, and `begin_review()` now emit `GovernanceEvent`s, so hooks see changes regardless of entry point. Previously only `web.py` emitted, which meant the entire derivation path — now the main way flags are created — bypassed `AuditLogger` and `ComplianceGate` entirely. All four methods take an `actor` argument; `web.py` passes `"web_dashboard"` and its duplicate emissions are removed, so each action fires exactly once.
+- **`UseCaseContext.get_unattributed_acceptances()`** — enforceable findings accepted without naming anyone. The replacement for refusing them: findable rather than forbidden.
+- **`ApprovalContext.open_findings_at_decision` and `UseCaseProfile.decision_was_contested()`** — a decision records what was still outstanding when it was taken.
+- **`RiskFlag.is_attributed`** and **`RiskFlag.use_case_name`**, the latter carried into emitted events and serialization.
+- **13 new tests** (576 total).
+
+### Notes
+
+- Enforcement belongs in a `GovernanceHook`, where an organization controls it, or in the host system. `ComplianceGate` already exists for exactly this.
+
+
 ### Added
 
 - **Authority weighting** (`authority.py`) — `Authority` precedence enum (statute → binding contract → regulatory guidance → technical standard → advocacy → emerging), `AuthoritySource` attribution, and clearance gating. Flags from an enforceable source route to the qualified clearance role regardless of dimension, and `accept_risk()` raises `ClearanceError` unless a clearing party is named.

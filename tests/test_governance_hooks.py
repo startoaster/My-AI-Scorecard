@@ -520,3 +520,143 @@ class TestCustomHook:
         hook.on_compliance_check(event)
         hook.on_security_profile_applied(event)
         hook.on_event(event)
+
+
+# ---------------------------------------------------------------------------
+# Events fire from the Python API, not only from the web layer
+# ---------------------------------------------------------------------------
+
+from ai_use_case_context.authority import Authority as _Authority
+from ai_use_case_context.core import (
+    RiskDimension as _RiskDimension,
+    RiskLevel as _RiskLevel,
+    UseCaseContext as _UseCaseContext,
+)
+
+
+class _Recorder(GovernanceHook):
+    def __init__(self):
+        self.events = []
+
+    def handle(self, event):
+        self.events.append(event)
+
+    def on_flag_raised(self, event):
+        self.events.append(event)
+
+    def on_flag_resolved(self, event):
+        self.events.append(event)
+
+    def on_flag_accepted(self, event):
+        self.events.append(event)
+
+    def on_review_started(self, event):
+        self.events.append(event)
+
+
+class TestCoreApiEmitsEvents:
+    def setup_method(self):
+        clear_hooks()
+        self.rec = _Recorder()
+        register_hook(self.rec)
+
+    def teardown_method(self):
+        clear_hooks()
+
+    def _types(self):
+        return [e.event_type for e in self.rec.events]
+
+    def test_flag_risk_emits(self):
+        ctx = _UseCaseContext(name="UC")
+        ctx.flag_risk(_RiskDimension.QUALITY, _RiskLevel.HIGH, "d")
+        assert GovernanceEventType.FLAG_RAISED in self._types()
+
+    def test_resolve_emits(self):
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(_RiskDimension.QUALITY, _RiskLevel.HIGH, "d")
+        self.rec.events.clear()
+        flag.resolve("done")
+        assert GovernanceEventType.FLAG_RESOLVED in self._types()
+
+    def test_accept_emits(self):
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(_RiskDimension.QUALITY, _RiskLevel.HIGH, "d")
+        self.rec.events.clear()
+        flag.accept_risk("accepted")
+        assert GovernanceEventType.FLAG_ACCEPTED in self._types()
+
+    def test_begin_review_emits(self):
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(_RiskDimension.QUALITY, _RiskLevel.HIGH, "d")
+        self.rec.events.clear()
+        flag.begin_review()
+        assert GovernanceEventType.REVIEW_STARTED in self._types()
+
+    def test_derived_flags_emit_too(self):
+        # The derivation path is now the main way flags are created, so it is
+        # the path that most needs to reach an audit log.
+        from ai_use_case_context.capability import (
+            CapabilityProfile, ControlMode, FinalPixelRole,
+            LikenessPresence, RegionProfile, TransformationClass,
+        )
+        ctx = _UseCaseContext(name="UC")
+        prof = CapabilityProfile(name="c")
+        prof.add_region(RegionProfile(
+            region="r",
+            transformation=TransformationClass.SYNTHESIS,
+            control=ControlMode.PRESET,
+            final_pixel=FinalPixelRole.DELIVERED_FRAME,
+            likeness=LikenessPresence.PERFORMANCE,
+        ))
+        added = prof.derive_flags(ctx)
+        raised = [e for e in self.rec.events
+                  if e.event_type is GovernanceEventType.FLAG_RAISED]
+        assert len(raised) == len(added)
+
+    def test_event_carries_use_case_and_authority(self):
+        ctx = _UseCaseContext(name="Shot 0100")
+        ctx.flag_risk(
+            _RiskDimension.LEGAL_IP, _RiskLevel.HIGH, "d",
+            authority=_Authority.BINDING_CONTRACT,
+        )
+        event = self.rec.events[0]
+        assert event.use_case_name == "Shot 0100"
+        assert event.metadata["authority"] == "BINDING_CONTRACT"
+
+    def test_acceptance_event_carries_attribution(self):
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(
+            _RiskDimension.LEGAL_IP, _RiskLevel.HIGH, "d",
+            authority=_Authority.STATUTE,
+        )
+        self.rec.events.clear()
+        flag.accept_risk("ok", cleared_by="Counsel")
+        assert self.rec.events[0].metadata["cleared_by"] == "Counsel"
+
+    def test_unattributed_acceptance_is_visible_in_the_event(self):
+        # The framework does not refuse it, so the audit trail has to show it.
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(
+            _RiskDimension.LEGAL_IP, _RiskLevel.HIGH, "d",
+            authority=_Authority.STATUTE,
+        )
+        self.rec.events.clear()
+        flag.accept_risk("ok")
+        assert self.rec.events[0].metadata["cleared_by"] == ""
+
+    def test_actor_defaults_to_system_and_is_overridable(self):
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(_RiskDimension.QUALITY, _RiskLevel.HIGH, "d")
+        assert self.rec.events[0].actor == "system"
+        self.rec.events.clear()
+        flag.resolve("done", actor="web_dashboard")
+        assert self.rec.events[0].actor == "web_dashboard"
+
+    def test_audit_logger_captures_api_driven_changes(self):
+        clear_hooks()
+        logger = AuditLogger()
+        register_hook(logger)
+        ctx = _UseCaseContext(name="UC")
+        flag = ctx.flag_risk(_RiskDimension.QUALITY, _RiskLevel.HIGH, "d")
+        flag.resolve("done")
+        assert len(logger.query()) >= 2

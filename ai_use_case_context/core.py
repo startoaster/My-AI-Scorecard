@@ -15,8 +15,12 @@ from typing import Optional, Union
 from ai_use_case_context.authority import (
     Authority,
     AuthoritySource,
-    ClearanceError,
-    required_clearance_role,
+    suggested_clearance_role,
+)
+from ai_use_case_context.governance_hooks import (
+    GovernanceEvent,
+    GovernanceEventType,
+    emit_governance_event,
 )
 
 
@@ -140,9 +144,16 @@ class RiskFlag:
 
     ``authority`` records how much force the source behind this flag carries.
     It defaults to ``UNSPECIFIED``, which behaves exactly as flags did before
-    authority existed. Flags attributed to an enforceable source (a binding
-    agreement or a statute) cannot be accepted without naming who cleared
-    them — see :meth:`accept_risk`.
+    authority existed.
+
+    State transitions record what happened and emit a governance event. They
+    do not refuse. Whether a given person may accept a given finding is a
+    question about an organization's delegation of authority and its identity
+    systems, and this framework has no way to answer it — a check here would
+    be trivially bypassed and would buy false assurance. Organizations that
+    want that enforced should express it in a
+    :class:`~ai_use_case_context.governance_hooks.GovernanceHook`, where it
+    sits in their control rather than in a library default.
     """
     dimension: DimensionType
     level: RiskLevel
@@ -155,6 +166,30 @@ class RiskFlag:
     authority: Authority = Authority.UNSPECIFIED
     source: Optional[AuthoritySource] = None
     cleared_by: str = ""
+    use_case_name: str = ""
+
+    def _emit(self, event_type: GovernanceEventType, actor: str) -> None:
+        """Emit a lifecycle event for this flag.
+
+        Emitted from the flag itself rather than from any one caller, so hooks
+        fire the same way whether a change came from the web dashboard, a
+        derivation rule, or a script.
+        """
+        emit_governance_event(GovernanceEvent(
+            event_type=event_type,
+            use_case_name=self.use_case_name,
+            dimension=self.dimension.name,
+            level=self.level.name,
+            description=self.description,
+            actor=actor or "system",
+            metadata={
+                "authority": self.authority.name,
+                "source": self.source.to_dict() if self.source else None,
+                "reviewer": self.reviewer,
+                "cleared_by": self.cleared_by,
+                "status": self.status.name,
+            },
+        ))
 
     @property
     def is_blocking(self) -> bool:
@@ -172,49 +207,55 @@ class RiskFlag:
             and self.status == ReviewStatus.OPEN
         )
 
-    def resolve(self, notes: str = ""):
+    def resolve(self, notes: str = "", actor: str = "system"):
         """Mark this flag as resolved."""
         self.status = ReviewStatus.RESOLVED
         self.resolution_notes = notes
         self.resolved_at = datetime.now()
+        self._emit(GovernanceEventType.FLAG_RESOLVED, actor)
 
     @property
-    def requires_qualified_clearance(self) -> bool:
-        """True if this flag comes from an enforceable source.
+    def is_from_enforceable_source(self) -> bool:
+        """True if the source behind this flag is a statute or binding term.
 
-        Such a flag can be routed and recorded by the framework, but the
-        decision to proceed despite it belongs to someone with standing to
-        make it — not to the tool, and not to an unattributed actor.
+        A statement about the finding, not a rule about who may act on it.
         """
         return self.authority.is_enforceable
 
-    def accept_risk(self, notes: str = "", cleared_by: str = ""):
+    @property
+    def is_attributed(self) -> bool:
+        """True if an accepted flag names who accepted it.
+
+        Meaningful only once accepted; open flags are trivially unattributed.
+        """
+        return bool(self.cleared_by)
+
+    def accept_risk(
+        self, notes: str = "", cleared_by: str = "", actor: str = "system"
+    ):
         """Acknowledge the risk and allow the workflow to proceed.
+
+        Records the acceptance and who made it. Naming ``cleared_by`` is
+        strongly advisable for a finding from an enforceable source — see
+        :meth:`UseCaseContext.get_unattributed_acceptances` — but it is not
+        required, because this framework cannot verify standing and refusing
+        would only push callers into setting ``status`` directly.
 
         Args:
             notes:      Rationale for accepting.
-            cleared_by: Who accepted it. Required when the flag comes from an
-                        enforceable source.
-
-        Raises:
-            ClearanceError: If the flag requires qualified clearance and no
-                clearing party was named.
+            cleared_by: Who accepted it.
+            actor:      What performed the change, for the emitted event.
         """
-        if self.requires_qualified_clearance and not cleared_by:
-            raise ClearanceError(
-                f"Flag from an enforceable source "
-                f"({self.authority.label}) cannot be accepted without an "
-                f"attributed reviewer. Required: "
-                f"{required_clearance_role(self.authority)}."
-            )
         self.status = ReviewStatus.ACCEPTED
         self.resolution_notes = notes
         self.cleared_by = cleared_by
         self.resolved_at = datetime.now()
+        self._emit(GovernanceEventType.FLAG_ACCEPTED, actor)
 
-    def begin_review(self):
+    def begin_review(self, actor: str = "system"):
         """Move this flag into the In Review state."""
         self.status = ReviewStatus.IN_REVIEW
+        self._emit(GovernanceEventType.REVIEW_STARTED, actor)
 
     def mark_blocked(self):
         """Hard-block this flag, indicating a structural issue."""
@@ -323,25 +364,24 @@ class UseCaseContext:
         reviewer: str = "",
         authority: Authority = Authority.UNSPECIFIED,
         source: Optional[AuthoritySource] = None,
+        actor: str = "system",
     ) -> RiskFlag:
         """
         Flag a risk on this use case.
 
-        If no reviewer is provided, one is auto-assigned. Flags from an
-        enforceable source route to the role required to clear that authority
-        rather than to the dimension's usual reviewer — a contract question
-        does not become a supervisor's call because it surfaced under the
-        Quality dimension.
+        If no reviewer is provided, one is assigned from this context's
+        routing table. The organization's table always wins; the authority's
+        suggested clearance role is used only where the table has no entry,
+        in place of leaving the flag unassigned.
 
         Returns the created RiskFlag so you can further manipulate it.
         """
         if not reviewer:
-            if authority.is_enforceable:
-                reviewer = required_clearance_role(authority)
-            else:
-                reviewer = self.routing_table.get(
-                    (dimension, level), "Unassigned"
-                )
+            reviewer = self.routing_table.get((dimension, level), "")
+        if not reviewer and authority.is_enforceable:
+            reviewer = suggested_clearance_role(authority)
+        if not reviewer:
+            reviewer = "Unassigned"
 
         flag = RiskFlag(
             dimension=dimension,
@@ -350,8 +390,10 @@ class UseCaseContext:
             reviewer=reviewer,
             authority=authority,
             source=source,
+            use_case_name=self.name,
         )
         self.risk_flags.append(flag)
+        flag._emit(GovernanceEventType.FLAG_RAISED, actor)
         return flag
 
     # -- Routing -----------------------------------------------------------
@@ -424,13 +466,28 @@ class UseCaseContext:
     def get_enforceable_flags(self) -> list[RiskFlag]:
         """Return unresolved flags backed by a binding agreement or statute.
 
-        These are the flags that cannot be cleared by the team that raised
-        them, so they are worth surfacing separately from severity.
+        Worth surfacing separately from severity: a low-severity contract
+        question and a low-severity preference are not the same thing.
         """
         return [
             f for f in self.risk_flags
-            if f.requires_qualified_clearance
+            if f.is_from_enforceable_source
             and f.status not in (ReviewStatus.RESOLVED, ReviewStatus.ACCEPTED)
+        ]
+
+    def get_unattributed_acceptances(self) -> list[RiskFlag]:
+        """Return accepted enforceable findings with nobody named.
+
+        The framework records acceptances rather than policing them, so this
+        is how an audit, a hook, or a reviewer finds the ones where standing
+        was never recorded. An empty list is not proof that the people who
+        accepted had authority to — only that somebody was named.
+        """
+        return [
+            f for f in self.risk_flags
+            if f.is_from_enforceable_source
+            and f.status is ReviewStatus.ACCEPTED
+            and not f.is_attributed
         ]
 
     def max_authority(self) -> Authority:

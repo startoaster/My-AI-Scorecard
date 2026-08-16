@@ -571,16 +571,8 @@ def create_app() -> Flask:
         uc = _dashboard._use_cases.get(name)
         if uc and 0 <= idx < len(uc.risk_flags):
             flag = uc.risk_flags[idx]
-            flag.resolve("Resolved via web dashboard")
+            flag.resolve("Resolved via web dashboard", actor="web_dashboard")
             _emit("flag_resolved", name, idx, flag)
-            emit_governance_event(GovernanceEvent(
-                event_type=GovernanceEventType.FLAG_RESOLVED,
-                use_case_name=name,
-                dimension=flag.dimension.name,
-                level=flag.level.name,
-                description=flag.description,
-                actor="web_dashboard",
-            ))
         return redirect(url_for("use_case_detail", name=name, msg="Flag resolved"))
 
     @app.route("/use-case/<name>/flag/<int:idx>/accept", methods=["POST"])
@@ -588,16 +580,8 @@ def create_app() -> Flask:
         uc = _dashboard._use_cases.get(name)
         if uc and 0 <= idx < len(uc.risk_flags):
             flag = uc.risk_flags[idx]
-            flag.accept_risk("Risk accepted via web dashboard")
+            flag.accept_risk("Risk accepted via web dashboard", actor="web_dashboard")
             _emit("flag_accepted", name, idx, flag)
-            emit_governance_event(GovernanceEvent(
-                event_type=GovernanceEventType.FLAG_ACCEPTED,
-                use_case_name=name,
-                dimension=flag.dimension.name,
-                level=flag.level.name,
-                description=flag.description,
-                actor="web_dashboard",
-            ))
         return redirect(url_for("use_case_detail", name=name, msg="Risk accepted"))
 
     @app.route("/use-case/<name>/flag/<int:idx>/review", methods=["POST"])
@@ -605,16 +589,8 @@ def create_app() -> Flask:
         uc = _dashboard._use_cases.get(name)
         if uc and 0 <= idx < len(uc.risk_flags):
             flag = uc.risk_flags[idx]
-            flag.begin_review()
+            flag.begin_review(actor="web_dashboard")
             _emit("flag_review_started", name, idx, flag)
-            emit_governance_event(GovernanceEvent(
-                event_type=GovernanceEventType.REVIEW_STARTED,
-                use_case_name=name,
-                dimension=flag.dimension.name,
-                level=flag.level.name,
-                description=flag.description,
-                actor="web_dashboard",
-            ))
         return redirect(url_for("use_case_detail", name=name, msg="Review started"))
 
     @app.route("/use-case/<name>/add-flag", methods=["POST"])
@@ -636,16 +612,8 @@ def create_app() -> Flask:
             level = RiskLevel[request.form["level"]]
             desc = request.form.get("description", "").strip()
             if desc:
-                flag = uc.flag_risk(dim, level, desc)
+                flag = uc.flag_risk(dim, level, desc, actor="web_dashboard")
                 _emit("flag_added", name, flag)
-                emit_governance_event(GovernanceEvent(
-                    event_type=GovernanceEventType.FLAG_RAISED,
-                    use_case_name=name,
-                    dimension=dim.name,
-                    level=level.name,
-                    description=desc,
-                    actor="web_dashboard",
-                ))
         return redirect(url_for("use_case_detail", name=name, msg="Flag added"))
 
     @app.route("/use-case/<name>/escalate", methods=["POST"])

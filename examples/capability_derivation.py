@@ -4,8 +4,12 @@ Deriving governance from recorded facts instead of a form.
 Shows the path end to end:
 
     pipeline signals ─┐
-    intake facts      ├─> risk flags -> clearance -> approval decision
+    intake facts      ├─> risk flags -> acceptance record -> decision record
     operational facts ─┘
+
+Nothing here is refused. The framework records what was found, what was
+accepted, by whom, and what was still open when the call was made — then
+leaves the call to the people entitled to make it.
 
 Nobody types a severity anywhere in this script. Every flag follows from a
 recorded fact or a stated field, which is what makes two people describing the
@@ -21,11 +25,9 @@ Run with:  python examples/capability_derivation.py
 from ai_use_case_context import (
     ApprovalContext,
     ApprovalDecision,
-    ApprovalError,
     ApprovalSubject,
     AuthorshipRecord,
     BusinessContext,
-    ClearanceError,
     CollectionPolicy,
     CommercialNature,
     Custodian,
@@ -156,25 +158,34 @@ def main():
     print()
 
     # ------------------------------------------------------------------
-    # 6. Enforceable findings cannot be self-cleared
+    # 6. Acceptances are recorded, not policed
     # ------------------------------------------------------------------
-    for flag in ctx.get_enforceable_flags():
-        try:
-            flag.accept_risk("looks fine to me")
-        except ClearanceError as exc:
-            print(f"Refused clearance: {exc}")
-            break
+    # The framework cannot verify that anyone has standing to accept a
+    # contract finding, so it does not pretend to. It records what happened
+    # and makes the gaps findable.
+    open_enforceable = ctx.get_enforceable_flags()
+    if open_enforceable:
+        # Accepted by nobody in particular — allowed, and now findable.
+        open_enforceable[0].accept_risk("proceeding")
+
+    unattributed = ctx.get_unattributed_acceptances()
+    print(f"Enforceable findings accepted with nobody named: {len(unattributed)}")
+    for flag in unattributed:
+        print(f"  - [{flag.authority.label}] {flag.description[:60]}...")
     print()
 
     # ------------------------------------------------------------------
-    # 7. Nor can the proposal be approved around them
+    # 7. The decision records what was still open when it was taken
     # ------------------------------------------------------------------
-    try:
-        intake.record_decision(
-            ctx, ApprovalDecision.APPROVED, decided_by="Review Board"
-        )
-    except ApprovalError as exc:
-        print(f"Refused approval: {exc}")
+    intake.record_decision(
+        ctx, ApprovalDecision.APPROVED_WITH_CONSTRAINTS,
+        decided_by="Review Board",
+        notes="Limited to shots 0100-0140.",
+    )
+    print(f"Decision:  {intake.approval.decision.value}")
+    print(f"Contested: {intake.decision_was_contested()}")
+    for entry in intake.approval.open_findings_at_decision:
+        print(f"  still open at decision: {entry[:70]}...")
     print()
 
     # ------------------------------------------------------------------

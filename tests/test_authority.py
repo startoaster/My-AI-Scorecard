@@ -5,11 +5,10 @@ import pytest
 from ai_use_case_context.authority import (
     Authority,
     AuthoritySource,
-    ClearanceError,
     Lexicon,
     TermDefinition,
     default_lexicon,
-    required_clearance_role,
+    suggested_clearance_role,
 )
 from ai_use_case_context.core import (
     RiskDimension,
@@ -34,9 +33,9 @@ class TestAuthority:
         assert not Authority.TECHNICAL_STANDARD.is_enforceable
         assert not Authority.UNSPECIFIED.is_enforceable
 
-    def test_clearance_role_for_enforceable(self):
-        assert "counsel" in required_clearance_role(Authority.STATUTE).lower()
-        assert "counsel" in required_clearance_role(
+    def test_suggested_clearance_role_for_enforceable(self):
+        assert "counsel" in suggested_clearance_role(Authority.STATUTE).lower()
+        assert "counsel" in suggested_clearance_role(
             Authority.BINDING_CONTRACT
         ).lower()
 
@@ -44,72 +43,76 @@ class TestAuthority:
         assert Authority.BINDING_CONTRACT.label == "Binding Contract"
 
 
-class TestFlagClearance:
-    def test_unspecified_authority_accepts_without_clearer(self):
-        # Backwards compatible: flags without an attributed source behave
-        # exactly as they did before authority existed.
-        flag = RiskFlag(
-            dimension=RiskDimension.QUALITY,
-            level=RiskLevel.HIGH,
-            description="test",
-        )
-        flag.accept_risk("proceeding")
-        assert flag.status is ReviewStatus.ACCEPTED
-
-    def test_enforceable_flag_requires_clearer(self):
-        flag = RiskFlag(
+class TestAcceptanceIsRecordedNotPoliced:
+    def _enforceable_flag(self, level=RiskLevel.HIGH):
+        return RiskFlag(
             dimension=RiskDimension.LEGAL_IP,
-            level=RiskLevel.HIGH,
+            level=level,
             description="test",
             authority=Authority.BINDING_CONTRACT,
         )
-        with pytest.raises(ClearanceError):
-            flag.accept_risk("proceeding anyway")
-        assert flag.status is ReviewStatus.OPEN
 
-    def test_enforceable_flag_accepts_with_clearer(self):
-        flag = RiskFlag(
-            dimension=RiskDimension.LEGAL_IP,
-            level=RiskLevel.HIGH,
-            description="test",
-            authority=Authority.STATUTE,
-        )
+    def test_unattributed_acceptance_is_allowed(self):
+        # The framework cannot verify standing, and refusing would only push
+        # callers into assigning status directly. It records instead.
+        flag = self._enforceable_flag()
+        flag.accept_risk("proceeding anyway")
+        assert flag.status is ReviewStatus.ACCEPTED
+        assert not flag.is_attributed
+
+    def test_attributed_acceptance_is_recorded(self):
+        flag = self._enforceable_flag()
         flag.accept_risk("reviewed", cleared_by="Jordan Reyes, Counsel")
         assert flag.status is ReviewStatus.ACCEPTED
         assert flag.cleared_by == "Jordan Reyes, Counsel"
+        assert flag.is_attributed
 
-    def test_requires_qualified_clearance_property(self):
-        enforceable = RiskFlag(
-            dimension=RiskDimension.LEGAL_IP,
-            level=RiskLevel.LOW,
-            description="t",
-            authority=Authority.BINDING_CONTRACT,
-        )
+    def test_is_from_enforceable_source_is_about_authority_not_severity(self):
+        enforceable = self._enforceable_flag(level=RiskLevel.LOW)
         voluntary = RiskFlag(
             dimension=RiskDimension.LEGAL_IP,
             level=RiskLevel.CRITICAL,
             description="t",
             authority=Authority.TECHNICAL_STANDARD,
         )
-        # Authority, not severity, drives who may clear.
-        assert enforceable.requires_qualified_clearance
-        assert not voluntary.requires_qualified_clearance
+        assert enforceable.is_from_enforceable_source
+        assert not voluntary.is_from_enforceable_source
 
-    def test_resolve_is_not_gated(self):
-        # Resolving means the underlying issue is gone; only accepting a
-        # standing risk needs attribution.
-        flag = RiskFlag(
-            dimension=RiskDimension.LEGAL_IP,
-            level=RiskLevel.HIGH,
-            description="test",
-            authority=Authority.BINDING_CONTRACT,
-        )
+    def test_resolve_records_without_gating(self):
+        flag = self._enforceable_flag()
         flag.resolve("consent obtained")
         assert flag.status is ReviewStatus.RESOLVED
 
+    def test_unattributed_acceptances_are_surfaced(self):
+        ctx = UseCaseContext(name="Test")
+        bare = ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.HIGH, "a",
+            authority=Authority.BINDING_CONTRACT,
+        )
+        named = ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.HIGH, "b",
+            authority=Authority.STATUTE,
+        )
+        voluntary = ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.HIGH, "c")
+        bare.accept_risk("fine")
+        named.accept_risk("fine", cleared_by="Counsel")
+        voluntary.accept_risk("fine")
+
+        unattributed = ctx.get_unattributed_acceptances()
+        assert [f.description for f in unattributed] == ["a"]
+
+    def test_open_enforceable_flags_are_not_unattributed_acceptances(self):
+        ctx = UseCaseContext(name="Test")
+        ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.HIGH, "still open",
+            authority=Authority.STATUTE,
+        )
+        assert ctx.get_unattributed_acceptances() == []
+
 
 class TestContextAuthorityRouting:
-    def test_enforceable_flag_routes_to_clearance_role(self):
+    def test_organisation_routing_table_wins_over_suggestion(self):
+        # The framework does not override an organisation's own routing.
         ctx = UseCaseContext(name="Test")
         flag = ctx.flag_risk(
             dimension=RiskDimension.QUALITY,
@@ -117,10 +120,26 @@ class TestContextAuthorityRouting:
             description="contract question surfacing under quality",
             authority=Authority.BINDING_CONTRACT,
         )
-        # Not the QA Lead the dimension table would normally assign.
-        assert flag.reviewer == required_clearance_role(
+        assert flag.reviewer == "QA Lead"
+
+    def test_suggestion_fills_only_an_unrouted_gap(self):
+        sparse = {(RiskDimension.LEGAL_IP, RiskLevel.HIGH): "Named Reviewer"}
+        ctx = UseCaseContext(name="Test", routing_table=sparse)
+        flag = ctx.flag_risk(
+            dimension=RiskDimension.QUALITY,
+            level=RiskLevel.LOW,
+            description="t",
+            authority=Authority.BINDING_CONTRACT,
+        )
+        assert flag.reviewer == suggested_clearance_role(
             Authority.BINDING_CONTRACT
         )
+
+    def test_unrouted_and_unattributed_falls_back_to_unassigned(self):
+        sparse = {(RiskDimension.LEGAL_IP, RiskLevel.HIGH): "Named Reviewer"}
+        ctx = UseCaseContext(name="Test", routing_table=sparse)
+        flag = ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.LOW, "t")
+        assert flag.reviewer == "Unassigned"
 
     def test_non_enforceable_uses_routing_table(self):
         ctx = UseCaseContext(name="Test")

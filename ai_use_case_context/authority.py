@@ -10,9 +10,17 @@ whether ignoring it is a breach or a preference.
 
 This module adds that property. An :class:`Authority` value ranks the force of
 the source behind a finding, and :class:`AuthoritySource` records which body
-said it and where. Findings backed by an enforceable source cannot be silently
-self-cleared (see :meth:`RiskFlag.accept_risk`); they require an attributed
-clearance from a qualified reviewer.
+said it and where.
+
+What it deliberately does not do is decide who may act on a finding. Whether a
+particular person has standing to accept a contract question depends on an
+organization's delegation of authority and its identity systems, and a library
+can see neither. A check here would be bypassed by assigning to ``status``
+directly, so it would buy no control and some false confidence.
+:meth:`UseCaseContext.get_unattributed_acceptances` surfaces the cases worth
+looking at; acting on them belongs to a
+:class:`~ai_use_case_context.governance_hooks.GovernanceHook` or to the host
+system.
 
 A second problem this module addresses is *definitional conflict*. Some terms
 are defined in more than one place, by bodies of differing authority, with
@@ -81,11 +89,15 @@ class Authority(Enum):
         return self.value > other.value
 
 
-# Who must sign off before a finding at a given authority can be accepted.
-# Findings from enforceable sources are not self-clearable — the framework
-# surfaces them and routes them, but the determination belongs to a human with
-# standing to make it.
-CLEARANCE_ROLE: dict[Authority, str] = {
+# A starting suggestion for who is likely to have standing to clear a finding
+# at a given authority level.
+#
+# Advisory only. This framework does not decide who may accept a finding — that
+# comes from an organization's own delegation of authority and its identity
+# systems, neither of which a library can see. These values are used solely to
+# route a flag that an organization's own routing table has no entry for, in
+# place of leaving it unassigned. Replace them freely.
+SUGGESTED_CLEARANCE_ROLE: dict[Authority, str] = {
     Authority.STATUTE: "Qualified legal counsel",
     Authority.BINDING_CONTRACT: "Qualified legal counsel or labor relations",
     Authority.REGULATORY_GUIDANCE: "Compliance lead",
@@ -96,14 +108,13 @@ CLEARANCE_ROLE: dict[Authority, str] = {
 }
 
 
-def required_clearance_role(authority: Authority) -> str:
-    """Return the role required to clear a finding at this authority level."""
-    return CLEARANCE_ROLE.get(authority, "Department supervisor")
+def suggested_clearance_role(authority: Authority) -> str:
+    """Suggest a role likely to have standing to clear a finding.
 
-
-class ClearanceError(RuntimeError):
-    """Raised when a finding from an enforceable source is cleared without
-    an attributed, qualified reviewer."""
+    A suggestion for routing, not a requirement. Nothing in this framework
+    checks it.
+    """
+    return SUGGESTED_CLEARANCE_ROLE.get(authority, "Department supervisor")
 
 
 # ---------------------------------------------------------------------------

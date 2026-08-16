@@ -493,7 +493,7 @@ class TestVendorFlagDerivation:
         litigation = next(f for f in flags if "litigation" in f.description)
         assert litigation.level is RiskLevel.CRITICAL
         assert litigation.authority is Authority.STATUTE
-        assert litigation.requires_qualified_clearance
+        assert litigation.is_from_enforceable_source
 
     def test_no_copyright_assessment_raises_no_copyright_flags(self):
         ctx = UseCaseContext(name="Vendor review")

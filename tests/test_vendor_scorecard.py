@@ -102,6 +102,8 @@ class TestCopyrightAssessment:
             license_verification_documented=True,
             opt_out_compliance_process=True,
             indemnification_for_ai_outputs=True,
+            eu_dsm_article4_compliance=True,
+            eu_training_data_summary_published=True,
         )
         assert c.risk_level == "low"
         assert len(c.gaps) == 0
@@ -684,3 +686,125 @@ class TestExplicitEmptyConfiguration:
             },
         )
         assert result.tier is VendorTier.CONDITIONAL
+
+
+
+class TestCopyrightRiskSingleDefects:
+    """Each high-severity fact must stand on its own.
+
+    The earlier rule required two before reporting "high", so a single
+    disqualifying fact reported as "low".
+    """
+
+    def _clean(self, **overrides):
+        kw = dict(
+            training_data_lawfully_obtained=True,
+            license_verification_documented=True,
+            opt_out_compliance_process=True,
+            indemnification_for_ai_outputs=True,
+            eu_dsm_article4_compliance=True,
+            eu_training_data_summary_published=True,
+            competes_with_training_sources=False,
+            pending_litigation=False,
+        )
+        kw.update(overrides)
+        return CopyrightAssessment(**kw)
+
+    def test_clean_assessment_is_low(self):
+        assert self._clean().risk_level == "low"
+
+    def test_unlawful_training_data_alone_is_high(self):
+        assert self._clean(
+            training_data_lawfully_obtained=False
+        ).risk_level == "high"
+
+    def test_undocumented_licence_verification_alone_is_high(self):
+        assert self._clean(
+            license_verification_documented=False
+        ).risk_level == "high"
+
+    def test_competing_with_training_sources_alone_is_high(self):
+        assert self._clean(
+            competes_with_training_sources=True
+        ).risk_level == "high"
+
+    def test_litigation_alone_is_critical(self):
+        assert self._clean(pending_litigation=True).risk_level == "critical"
+
+    def test_competing_and_unlawful_together_is_critical(self):
+        assert self._clean(
+            competes_with_training_sources=True,
+            training_data_lawfully_obtained=False,
+        ).risk_level == "critical"
+
+    def test_missing_opt_out_alone_is_medium(self):
+        assert self._clean(opt_out_compliance_process=False).risk_level == "medium"
+
+    def test_missing_indemnification_alone_is_medium(self):
+        assert self._clean(
+            indemnification_for_ai_outputs=False
+        ).risk_level == "medium"
+
+
+class TestJurisdictionScopedFields:
+    """The EU fields are reported but do not drive an unscoped risk level."""
+
+    def _clean(self, **overrides):
+        kw = dict(
+            training_data_lawfully_obtained=True,
+            license_verification_documented=True,
+            opt_out_compliance_process=True,
+            indemnification_for_ai_outputs=True,
+            eu_dsm_article4_compliance=True,
+            eu_training_data_summary_published=True,
+        )
+        kw.update(overrides)
+        return CopyrightAssessment(**kw)
+
+    def test_eu_fields_appear_in_gaps(self):
+        # Previously these two inputs affected nothing at all.
+        c = self._clean(
+            eu_dsm_article4_compliance=False,
+            eu_training_data_summary_published=False,
+        )
+        assert len(c.gaps) == 2
+        assert any("Art. 4" in g for g in c.gaps)
+        assert any("Training data summary" in g for g in c.gaps)
+
+    def test_eu_fields_do_not_change_risk_level(self):
+        # Whether they matter depends on where the work is exploited, and this
+        # object carries no jurisdiction.
+        c = self._clean(
+            eu_dsm_article4_compliance=False,
+            eu_training_data_summary_published=False,
+        )
+        assert c.risk_level == "low"
+
+    def test_monotonicity_across_all_combinations(self):
+        import itertools
+
+        order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        good = [
+            "training_data_lawfully_obtained",
+            "license_verification_documented",
+            "opt_out_compliance_process",
+            "indemnification_for_ai_outputs",
+        ]
+        bad = ["competes_with_training_sources", "pending_litigation"]
+        levels = {}
+        for combo in itertools.product([False, True], repeat=len(good) + len(bad)):
+            kw = dict(zip(good + bad, combo))
+            levels[tuple(sorted(kw.items()))] = CopyrightAssessment(**kw).risk_level
+
+        for key, lvl in levels.items():
+            kw = dict(key)
+            for f in good:
+                if kw[f]:
+                    worse = dict(kw)
+                    worse[f] = False
+                    assert order[levels[tuple(sorted(worse.items()))]] >= order[lvl]
+            for f in bad:
+                if not kw[f]:
+                    worse = dict(kw)
+                    worse[f] = True
+                    assert order[levels[tuple(sorted(worse.items()))]] >= order[lvl]

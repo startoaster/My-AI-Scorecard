@@ -211,6 +211,66 @@ because neither alone is decisive. Omit `ip_class` and the sensitivity-dependent
 rules stay silent rather than assuming the worst — guessing produces flags
 nobody can act on.
 
+## Tool and Model Sourcing
+
+Where a tool and its models come from, recorded as facts with rules rather than
+scored dimensions: vendor profile and AI posture, packaging and **separability**,
+model provisioning and origin, training-data source types and **source
+commitment**.
+
+```python
+sourcing = SourcingProfile(
+    packaging=ToolPackaging(
+        packaging=Packaging.SAAS,
+        separability=Separability.NOT_SEPARABLE,
+    ),
+    training_data=TrainingDataProfile(
+        source_types=[TrainingDataSource.WEB_CRAWL],
+        commitment=SourceCommitment.NONE_STATED,
+    ),
+)
+sourcing.derive_flags(ctx)
+```
+
+Two fields carry more weight than their size suggests. **Separability** decides
+whether a restriction can be imposed technically or only asked for — user
+discretion is a policy, not a control, and both it and `NOT_SEPARABLE` flag.
+**Source commitment** decides whether an approval granted against today's
+training corpus survives its replacement.
+
+## Vendor and Provenance Findings
+
+`VendorScorecard` and `ProvenanceCard` reach the governance engine through
+`derive_flags()`, the same way everything else does.
+
+```python
+scorecard.derive_flags(ctx)          # copyright facts, unanswered questions
+card.derive_flags(ctx, guard)        # licence status, opt-out, synthetic share
+tier_from_flags(ctx)                 # VendorTier, non-compensatory
+```
+
+`tier_from_flags()` replaces the weighted composite for approval decisions.
+The composite is **compensatory** — strength in one dimension offsets a
+disqualifying failure in another. A vendor in active copyright litigation whose
+tool competes with its own training sources scores 95 and lands in `PREFERRED`,
+because `copyright_risk` was computed and never consulted by the tiering logic.
+The same vendor via `derive_flags()` is `NOT_APPROVED` and blocks.
+
+The tier reads authority and severity together: an enforceable finding always
+costs at least one tier and can never be averaged away, but a low-severity
+contract point that only needs confirming lands at `CONDITIONAL` rather than
+disqualifying the vendor outright.
+
+`evaluate_vendor()` is retained and still useful for comparing vendors on
+documentation quality. It is not a basis for approving one.
+
+`evaluate_provenance()` stays as-is, because a **coverage** score is a
+legitimate measurement — it counts how thoroughly lineage is documented, which
+is objective. That is a different question from risk: a fully documented
+dataset can still be unusable, and `provenance_complete` can be `True` on a
+card whose licence is known to be non-compliant. Use `derive_flags()` for the
+risk, `evaluate_provenance()` for the coverage.
+
 ## Authorship Evidence
 
 No settled authority defines how much human contribution sustains copyright in

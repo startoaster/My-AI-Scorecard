@@ -53,6 +53,7 @@ from ai_use_case_context.vendor_scorecard import (
     CopyrightAssessment,
     VendorScorecard,
     evaluate_vendor,
+    tier_from_flags,
     essential_vendor_questions,
 )
 
@@ -329,33 +330,29 @@ ctx = UseCaseContext(
     tags=["animation", "genai", "character"],
 )
 
-# Flag risks based on compliance evaluation
+# The vendor and provenance assessments raise their own flags, carrying the
+# authority behind each finding. No hand-transcription of scores into
+# severities, and nothing lost between the assessment and the governance
+# record.
+vendor_flags = scorecard.derive_flags(ctx)
+provenance_flags = card.derive_flags(ctx, guard)
+
+print(f"Flags from vendor assessment:     {len(vendor_flags)}")
+print(f"Flags from provenance assessment: {len(provenance_flags)}")
+print(f"Vendor tier from flags:           {tier_from_flags(ctx).value}")
+print(
+    f"Vendor tier from legacy composite: {vendor_result.tier.value} "
+    f"({vendor_result.overall_score:.0f}/100)"
+)
+print()
+
+# Compliance does not yet derive flags, so this one is still transcribed by
+# hand — the pattern the other two have moved away from.
 if result.overall_score < 70:
     ctx.flag_risk(
         RiskDimension.LEGAL_IP,
         RiskLevel.HIGH,
         f"Compliance score {result.overall_score:.0f}/100 below threshold",
-    )
-
-if vendor_result.copyright_risk in ("high", "critical"):
-    ctx.flag_risk(
-        RiskDimension.LEGAL_IP,
-        RiskLevel.CRITICAL,
-        f"Vendor copyright risk: {vendor_result.copyright_risk}",
-    )
-
-if not guard.within_limits:
-    ctx.flag_risk(
-        RiskDimension.SECURITY,
-        RiskLevel.HIGH,
-        "Model collapse guard violated: synthetic data exceeds cap",
-    )
-
-if not card.all_licenses_verified:
-    ctx.flag_risk(
-        RiskDimension.LEGAL_IP,
-        RiskLevel.MEDIUM,
-        "Not all data source licenses verified",
     )
 
 print(ctx.summary())

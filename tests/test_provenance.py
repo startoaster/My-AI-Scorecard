@@ -310,3 +310,157 @@ class TestEvaluateProvenance:
         )
         result = evaluate_provenance(card)
         assert 0 < result.score < 100
+
+
+# ---------------------------------------------------------------------------
+# Flag derivation
+# ---------------------------------------------------------------------------
+
+from ai_use_case_context.authority import Authority as _Authority
+from ai_use_case_context.core import (
+    RiskDimension as _RiskDimension,
+    RiskLevel as _RiskLevel,
+    UseCaseContext as _UseCaseContext,
+)
+from ai_use_case_context.provenance import (
+    DEFAULT_PROVENANCE_RULES as _RULES,
+    ProvenanceRule as _ProvenanceRule,
+)
+
+
+def _clean_card() -> ProvenanceCard:
+    return ProvenanceCard(
+        dataset_name="Clean",
+        generation_flag=GenerationFlag.HUMAN_ORIGIN,
+        generation_confidence=1.0,
+        sources=[
+            DataSource(
+                name="Licensed A",
+                license_compliance=LicenseCompliance.VERIFIED,
+                copyright_holder="Rights Co",
+                opt_out_honored=True,
+            )
+        ],
+    )
+
+
+def _fired(card, guard=None) -> set:
+    return {r.rule_id for r in _RULES if r.applies(card, guard)}
+
+
+class TestProvenanceFlagDerivation:
+    def test_clean_card_fires_nothing(self):
+        assert _fired(_clean_card()) == set()
+
+    def test_non_compliant_licence_is_critical(self):
+        card = _clean_card()
+        card.sources.append(
+            DataSource(name="Bad", license_compliance=LicenseCompliance.NON_COMPLIANT)
+        )
+        rule = next(r for r in _RULES if r.rule_id == "NON_COMPLIANT_LICENCE")
+        assert rule.applies(card, None)
+        assert rule.level is _RiskLevel.CRITICAL
+        assert rule.authority is _Authority.BINDING_CONTRACT
+
+    def test_unknown_licence_is_lower_than_non_compliant(self):
+        card = _clean_card()
+        card.sources.append(
+            DataSource(name="Unknown", license_compliance=LicenseCompliance.UNKNOWN)
+        )
+        fired = _fired(card)
+        assert "UNKNOWN_LICENCE_STATUS" in fired
+        assert "NON_COMPLIANT_LICENCE" not in fired
+
+    def test_opt_out_gap_flags_under_statute(self):
+        card = _clean_card()
+        card.sources[0].opt_out_honored = False
+        rule = next(r for r in _RULES if r.rule_id == "OPT_OUT_NOT_HONOURED")
+        assert rule.applies(card, None)
+        assert rule.authority is _Authority.STATUTE
+
+    def test_no_sources_documented(self):
+        card = ProvenanceCard(
+            dataset_name="Empty",
+            generation_flag=GenerationFlag.HUMAN_ORIGIN,
+            generation_confidence=1.0,
+        )
+        assert "NO_SOURCES_DOCUMENTED" in _fired(card)
+
+    def test_unknown_origin_below_confidence_threshold(self):
+        card = _clean_card()
+        card.generation_flag = GenerationFlag.UNKNOWN
+        card.generation_confidence = 0.5
+        assert "UNKNOWN_GENERATION_ORIGIN" in _fired(card)
+
+    def test_unknown_origin_with_high_confidence_does_not_flag(self):
+        card = _clean_card()
+        card.generation_flag = GenerationFlag.UNKNOWN
+        card.generation_confidence = 0.9
+        assert "UNKNOWN_GENERATION_ORIGIN" not in _fired(card)
+
+    def test_synthetic_over_cap(self):
+        guard = ModelCollapseGuard(
+            max_synthetic_percentage=30.0, actual_synthetic_percentage=55.0
+        )
+        assert "SYNTHETIC_SHARE_OVER_CAP" in _fired(_clean_card(), guard)
+
+    def test_synthetic_within_cap_does_not_flag(self):
+        guard = ModelCollapseGuard(
+            max_synthetic_percentage=30.0, actual_synthetic_percentage=10.0,
+            vendor_disclosure_received=True,
+        )
+        assert _fired(_clean_card(), guard) == set()
+
+    def test_no_guard_means_no_guard_rules(self):
+        assert _fired(_clean_card(), None) == set()
+
+    def test_high_stakes_without_disclosure(self):
+        guard = ModelCollapseGuard(
+            high_stakes_domain=True, vendor_disclosure_received=False
+        )
+        assert "NO_SYNTHETIC_DISCLOSURE_HIGH_STAKES" in _fired(_clean_card(), guard)
+
+    def test_derive_flags_lands_on_context(self):
+        ctx = _UseCaseContext(name="Dataset review")
+        card = _clean_card()
+        card.sources.append(
+            DataSource(name="Bad", license_compliance=LicenseCompliance.NON_COMPLIANT)
+        )
+        flags = card.derive_flags(ctx)
+        assert len(flags) == 1
+        assert ctx.is_blocked()
+        assert ctx.get_enforceable_flags()
+
+    def test_coverage_score_and_risk_are_independent(self):
+        # A fully documented card can still be unusable: documenting a
+        # non-compliant licence raises the coverage score and the risk both.
+        card = ProvenanceCard(
+            dataset_name="Documented but unusable",
+            generation_flag=GenerationFlag.HUMAN_ORIGIN,
+            generation_confidence=1.0,
+            sources=[
+                DataSource(
+                    name="Bad",
+                    license_type="Proprietary",
+                    license_compliance=LicenseCompliance.NON_COMPLIANT,
+                    capture_method=CaptureMethod.CRAWL,
+                    collection_date=datetime.now(),
+                )
+            ],
+        )
+        ctx = _UseCaseContext(name="Dataset review")
+        card.derive_flags(ctx)
+        assert card.provenance_complete is True
+        assert ctx.is_blocked()
+
+    def test_custom_rules_replace_defaults(self):
+        ctx = _UseCaseContext(name="T")
+        catch_all = _ProvenanceRule(
+            rule_id="ALWAYS", title="always",
+            applies=lambda c, g: True,
+            dimension=_RiskDimension.QUALITY,
+            level=_RiskLevel.LOW,
+            describe=lambda c, g: "always",
+        )
+        flags = _clean_card().derive_flags(ctx, rules=[catch_all])
+        assert [f.description for f in flags] == ["always"]

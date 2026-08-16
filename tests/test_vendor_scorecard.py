@@ -3,6 +3,8 @@
 import pytest
 from datetime import datetime
 
+from ai_use_case_context.authority import Authority
+from ai_use_case_context.core import RiskDimension, RiskLevel, UseCaseContext
 from ai_use_case_context.vendor_scorecard import (
     ScorecardDimension,
     VendorTier,
@@ -15,6 +17,8 @@ from ai_use_case_context.vendor_scorecard import (
     VendorScorecard,
     VendorResult,
     evaluate_vendor,
+    tier_from_flags,
+    VendorRule,
     essential_vendor_questions,
 )
 
@@ -448,3 +452,193 @@ class TestScoreReporting:
         }
         restored = VendorResult.from_dict(legacy)
         assert restored.weighted_contributions == {}
+
+
+# ---------------------------------------------------------------------------
+# Flag derivation — the non-compensatory path
+# ---------------------------------------------------------------------------
+
+class TestVendorFlagDerivation:
+    def _strong_but_litigating(self):
+        return VendorScorecard(
+            vendor_name="Z",
+            copyright=CopyrightAssessment(
+                pending_litigation=True,
+                competes_with_training_sources=True,
+            ),
+            data_provenance=DimensionScore(score=95),
+            governance_security=DimensionScore(score=95),
+            ethics_compliance=DimensionScore(score=95),
+            technical_fit=DimensionScore(score=95),
+            commercial_terms=DimensionScore(score=95),
+            operating_model=DimensionScore(score=95),
+        )
+
+    def test_composite_still_rates_it_preferred(self):
+        # Documents the behaviour the flag path exists to replace: the
+        # weighted average lets strength elsewhere absorb a disqualifying fact.
+        assert evaluate_vendor(self._strong_but_litigating()).tier is (
+            VendorTier.PREFERRED
+        )
+
+    def test_flag_path_rates_the_same_vendor_not_approved(self):
+        ctx = UseCaseContext(name="Vendor review")
+        self._strong_but_litigating().derive_flags(ctx)
+        assert tier_from_flags(ctx) is VendorTier.NOT_APPROVED
+        assert ctx.is_blocked()
+
+    def test_litigation_is_critical_and_statutory(self):
+        ctx = UseCaseContext(name="Vendor review")
+        flags = self._strong_but_litigating().derive_flags(ctx)
+        litigation = next(f for f in flags if "litigation" in f.description)
+        assert litigation.level is RiskLevel.CRITICAL
+        assert litigation.authority is Authority.STATUTE
+        assert litigation.requires_qualified_clearance
+
+    def test_no_copyright_assessment_raises_no_copyright_flags(self):
+        ctx = UseCaseContext(name="Vendor review")
+        sc = VendorScorecard(vendor_name="Bare")
+        assert sc.derive_flags(ctx) == []
+
+    def test_clean_copyright_assessment_raises_nothing(self):
+        ctx = UseCaseContext(name="Vendor review")
+        sc = VendorScorecard(
+            vendor_name="Clean",
+            copyright=CopyrightAssessment(
+                training_data_lawfully_obtained=True,
+                license_verification_documented=True,
+                opt_out_compliance_process=True,
+                indemnification_for_ai_outputs=True,
+                eu_training_data_summary_published=True,
+            ),
+        )
+        assert sc.derive_flags(ctx) == []
+        assert tier_from_flags(ctx) is VendorTier.PREFERRED
+
+    def test_unsatisfactory_security_questions_flag(self):
+        ctx = UseCaseContext(name="Vendor review")
+        sc = VendorScorecard(
+            vendor_name="Q",
+            questions=[
+                VendorQuestion(
+                    question_id="VQ-001", question="q",
+                    dimension=ScorecardDimension.GOVERNANCE_SECURITY,
+                    satisfactory=False,
+                ),
+                VendorQuestion(
+                    question_id="VQ-009", question="q",
+                    dimension=ScorecardDimension.COMMERCIAL_TERMS,
+                    satisfactory=False,
+                ),
+            ],
+        )
+        flags = sc.derive_flags(ctx)
+        assert len(flags) == 1
+        assert "VQ-001" in flags[0].description
+        assert "VQ-009" not in flags[0].description
+
+    def test_satisfactory_questions_do_not_flag(self):
+        ctx = UseCaseContext(name="Vendor review")
+        sc = VendorScorecard(
+            vendor_name="Q",
+            questions=[
+                VendorQuestion(
+                    question_id="VQ-001", question="q",
+                    dimension=ScorecardDimension.GOVERNANCE_SECURITY,
+                    satisfactory=True,
+                ),
+            ],
+        )
+        assert sc.derive_flags(ctx) == []
+
+    def test_unsatisfactory_questions_filter_by_dimension(self):
+        sc = VendorScorecard(
+            vendor_name="Q",
+            questions=[
+                VendorQuestion(
+                    question_id="A", question="q",
+                    dimension=ScorecardDimension.GOVERNANCE_SECURITY,
+                ),
+                VendorQuestion(
+                    question_id="B", question="q",
+                    dimension=ScorecardDimension.TECHNICAL_FIT,
+                    satisfactory=True,
+                ),
+            ],
+        )
+        assert len(sc.unsatisfactory_questions()) == 1
+        assert sc.unsatisfactory_questions(
+            ScorecardDimension.TECHNICAL_FIT
+        ) == []
+
+    def test_custom_rules_replace_defaults(self):
+        ctx = UseCaseContext(name="Vendor review")
+        catch_all = VendorRule(
+            rule_id="ALWAYS", title="always",
+            applies=lambda sc: True,
+            dimension=RiskDimension.QUALITY,
+            level=RiskLevel.LOW,
+            describe=lambda sc: "always",
+        )
+        flags = VendorScorecard(vendor_name="X").derive_flags(
+            ctx, rules=[catch_all]
+        )
+        assert [f.description for f in flags] == ["always"]
+
+
+class TestTierFromFlags:
+    def test_ladder(self):
+        cases = [
+            (None, VendorTier.PREFERRED),
+            (RiskLevel.LOW, VendorTier.PREFERRED),
+            (RiskLevel.MEDIUM, VendorTier.APPROVED),
+            (RiskLevel.HIGH, VendorTier.CONDITIONAL),
+            (RiskLevel.CRITICAL, VendorTier.NOT_APPROVED),
+        ]
+        for level, expected in cases:
+            ctx = UseCaseContext(name="T")
+            if level is not None:
+                ctx.flag_risk(RiskDimension.QUALITY, level, "x")
+            assert tier_from_flags(ctx) is expected, level
+
+    def test_low_severity_enforceable_finding_costs_one_tier(self):
+        # Proportionate, but never averageable: a contract point that only
+        # needs confirming should not read the same as a breach.
+        ctx = UseCaseContext(name="T")
+        ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.LOW, "minor contract point",
+            authority=Authority.BINDING_CONTRACT,
+        )
+        assert tier_from_flags(ctx) is VendorTier.CONDITIONAL
+
+    def test_medium_enforceable_finding_is_conditional_not_approved(self):
+        ctx = UseCaseContext(name="T")
+        ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.MEDIUM, "transparency question",
+            authority=Authority.STATUTE,
+        )
+        assert tier_from_flags(ctx) is VendorTier.CONDITIONAL
+
+    def test_high_enforceable_finding_disqualifies(self):
+        ctx = UseCaseContext(name="T")
+        ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.HIGH, "likely breach",
+            authority=Authority.BINDING_CONTRACT,
+        )
+        assert tier_from_flags(ctx) is VendorTier.NOT_APPROVED
+
+    def test_high_non_enforceable_finding_is_only_conditional(self):
+        # Same severity, no enforceable source behind it — one tier better.
+        ctx = UseCaseContext(name="T")
+        ctx.flag_risk(RiskDimension.QUALITY, RiskLevel.HIGH, "quality concern")
+        assert tier_from_flags(ctx) is VendorTier.CONDITIONAL
+
+    def test_tier_improves_when_findings_are_resolved(self):
+        ctx = UseCaseContext(name="T")
+        flag = ctx.flag_risk(
+            RiskDimension.LEGAL_IP, RiskLevel.CRITICAL, "x",
+            authority=Authority.STATUTE,
+        )
+        assert tier_from_flags(ctx) is VendorTier.NOT_APPROVED
+        flag.resolve("addressed")
+        assert tier_from_flags(ctx) is VendorTier.PREFERRED

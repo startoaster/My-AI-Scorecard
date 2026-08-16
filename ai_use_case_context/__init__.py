@@ -198,7 +198,25 @@ from ai_use_case_context.provenance import (
     ProvenanceCard,
     ModelCollapseGuard,
     ProvenanceResult,
+    ProvenanceRule,
     evaluate_provenance,
+    DEFAULT_PROVENANCE_RULES,
+)
+from ai_use_case_context.sourcing import (
+    AIPosture,
+    VendorProfile,
+    Packaging,
+    Separability,
+    ToolPackaging,
+    ModelOrigin,
+    BYOPolicy,
+    ModelProvisioning,
+    TrainingDataSource,
+    SourceCommitment,
+    TrainingDataProfile,
+    SourcingRule,
+    SourcingProfile,
+    DEFAULT_SOURCING_RULES,
 )
 from ai_use_case_context.vendor_scorecard import (
     ScorecardDimension,
@@ -211,7 +229,10 @@ from ai_use_case_context.vendor_scorecard import (
     CopyrightAssessment,
     VendorScorecard,
     VendorResult,
+    VendorRule,
     evaluate_vendor,
+    tier_from_flags,
+    DEFAULT_VENDOR_RULES,
     essential_vendor_questions,
 )
 
@@ -380,6 +401,23 @@ __all__ = [
     "ModelCollapseGuard",
     "ProvenanceResult",
     "evaluate_provenance",
+    "ProvenanceRule",
+    "DEFAULT_PROVENANCE_RULES",
+    # Tool and model sourcing
+    "AIPosture",
+    "VendorProfile",
+    "Packaging",
+    "Separability",
+    "ToolPackaging",
+    "ModelOrigin",
+    "BYOPolicy",
+    "ModelProvisioning",
+    "TrainingDataSource",
+    "SourceCommitment",
+    "TrainingDataProfile",
+    "SourcingRule",
+    "SourcingProfile",
+    "DEFAULT_SOURCING_RULES",
     # Vendor scorecard
     "ScorecardDimension",
     "VendorTier",
@@ -393,6 +431,9 @@ __all__ = [
     "VendorResult",
     "evaluate_vendor",
     "essential_vendor_questions",
+    "VendorRule",
+    "tier_from_flags",
+    "DEFAULT_VENDOR_RULES",
 ]
 
 __version__ = "2.0.0a1"

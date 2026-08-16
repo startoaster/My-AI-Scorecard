@@ -18,7 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Use case intake** (`intake.py`) — the facts an approval rests on, as structured fields across business context, approval context, inputs, and outputs. `DEFAULT_INTAKE_RULES` key on *combinations* (restricted input plus public-facing output; licensed music plus a capability that introduces new content; fine-tuning plus restricted material) rather than on a severity someone typed. `IPClass` is unordered by design, with `RESTRICTED_IP_CLASSES` carrying the organization's judgment.
 - **Approval decisions** — `ApprovalSubject` (tool / model / workflow / fine-tuning workflow) and `ApprovalDecision` (approved / approved with constraints / approved for internal testing only / rejected), distinct from per-flag `ReviewStatus`. `record_decision()` refuses to approve while a finding from an enforceable source is open, and requires a named decider; rejection is never gated.
 - **Operational characteristics** (`operations.py`) — deployment host, region and update control; data residency and custodian; collection policy and retention; customer model refinement. Rules key on the pairing of an operational fact with material sensitivity, and stay silent when sensitivity is unknown rather than assuming it.
-- **175 new tests** (502 total, up from 327).
+- **Tool and model sourcing** (`sourcing.py`) — vendor profile and AI posture, packaging and separability, model provisioning and origin, training-data source types and commitment period. Recorded as facts with rules, not scored dimensions.
+- **Vendor findings reach the engine** — `VendorScorecard.derive_flags()` turns recorded copyright facts and unsatisfactory questionnaire responses into authority-carrying flags. `tier_from_flags()` classifies a vendor non-compensatorily from live flag state, reading authority and severity together.
+- **Provenance findings reach the engine** — `ProvenanceCard.derive_flags()` covers licence status, rights-holder reservations, unclassified origin, and synthetic share against the model collapse guard.
+- **236 new tests** (563 total, up from 327).
+
+### Changed
+
+- **`evaluate_vendor()` is no longer the approval path.** Its weighted composite is compensatory: a vendor in active copyright litigation whose tool competes with its own training sources scored 95 and landed in `PREFERRED`, because `copyright_risk` was computed and never consulted by the tiering logic. It is retained for comparing vendors on documentation quality and is documented as unsuitable for approving one. Use `derive_flags()` and `tier_from_flags()` instead.
+- **`evaluate_provenance()` is unchanged and stays.** A coverage score measures how thoroughly lineage is documented, which is objective and separate from risk — `provenance_complete` can be `True` for a dataset whose licence is known to be non-compliant.
 
 ### Fixed
 

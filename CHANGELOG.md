@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pipeline signal derivation** (`pipeline_signals.py`) — `GuidanceSignal` and `PipelineRecord` convert recorded pipeline values into a capability profile, so governance metadata is emitted by the workflow rather than typed into a form. Cut points are configurable via `DerivationThresholds` and travel with the record.
 - **Authorship evidence records** (`authorship.py`) — `AuthorshipRecord` documents human contribution per region without determining sufficiency, since no source supplies that threshold. Reports undocumented and sparsely documented generative regions.
 - **External vocabulary mapping** (`vocabulary.py`) — `VocabularyMapping` crosswalks the classification enums onto any external vocabulary without changes to rules, routing, or storage. Unmapped members translate to `None` rather than falling back to our own names.
-- **121 new tests** (448 total, up from 327).
+- **Use case intake** (`intake.py`) — the facts an approval rests on, as structured fields across business context, approval context, inputs, and outputs. `DEFAULT_INTAKE_RULES` key on *combinations* (restricted input plus public-facing output; licensed music plus a capability that introduces new content; fine-tuning plus restricted material) rather than on a severity someone typed. `IPClass` is unordered by design, with `RESTRICTED_IP_CLASSES` carrying the organization's judgment.
+- **Approval decisions** — `ApprovalSubject` (tool / model / workflow / fine-tuning workflow) and `ApprovalDecision` (approved / approved with constraints / approved for internal testing only / rejected), distinct from per-flag `ReviewStatus`. `record_decision()` refuses to approve while a finding from an enforceable source is open, and requires a named decider; rejection is never gated.
+- **Operational characteristics** (`operations.py`) — deployment host, region and update control; data residency and custodian; collection policy and retention; customer model refinement. Rules key on the pairing of an operational fact with material sensitivity, and stay silent when sensitivity is unknown rather than assuming it.
+- **175 new tests** (502 total, up from 327).
 
 ### Fixed
 

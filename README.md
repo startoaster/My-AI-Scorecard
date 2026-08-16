@@ -143,6 +143,74 @@ Thresholds are defaults, not measurements — calibrate them against your own
 pipeline via `DerivationThresholds`. They travel with the record, because the
 numbers are part of the finding.
 
+## Use Case Intake
+
+A classification says what an operation does. It does not say whether doing it
+*here*, to *this* material, for *this* audience, is acceptable. `UseCaseProfile`
+carries those facts as structured fields across four groups — business context,
+approval context, inputs, outputs.
+
+The reason to structure them: **escalation triggers are combinations, not
+severities.** Real guidance reads "these inputs, producing this output, at this
+final-use potential, using this class of capability, are pre-approved; anything
+else escalates." As fields, that becomes executable.
+
+```python
+intake = UseCaseProfile(
+    business=BusinessContext(
+        visibility=ProjectVisibility.PUBLIC,
+        ip_class=IPClass.PRE_RELEASE_IP,
+        commercial_nature=CommercialNature.COMMERCIAL_RELEASE,
+    ),
+    approval=ApprovalContext(subject=ApprovalSubject.WORKFLOW),
+    inputs=InputProfile(
+        ip_class=IPClass.PRE_RELEASE_IP,
+        input_types=[InputType.TALENT_LIKENESS],
+    ),
+    outputs=OutputProfile(final_pixel=FinalPixelRole.DELIVERED_FRAME),
+)
+intake.derive_flags(ctx, capability=profile)
+```
+
+`IPClass` is deliberately **unordered** — which class is most restricted is an
+organization's judgment, and encoding a ranking would assert a hierarchy no
+source supplies. Express yours by overriding `RESTRICTED_IP_CLASSES`.
+
+Approvals are recorded through `record_decision()`, which refuses to approve a
+proposal while a finding from an enforceable source is still open:
+
+```python
+intake.record_decision(ctx, ApprovalDecision.APPROVED, decided_by="Board")
+# ApprovalError: Cannot record 'Approved' while 2 finding(s) from an
+# enforceable source remain open ...
+```
+
+Rejecting is never gated — that never needs a clearance the framework can check.
+
+## Operational Characteristics
+
+Where the AI runs and what happens to the data. None of this is derivable from
+a capability classification: the same denoiser on-premises and in a vendor cloud
+raises different questions, while a denoiser and a video model deployed
+identically raise the same ones.
+
+```python
+operations = OperationalProfile(
+    deployment=Deployment(host=HostEnvironment.VENDOR_CLOUD, region="US"),
+    residency=DataResidency(custodian=Custodian.VENDOR),
+    collection=DataCollection(
+        customer_data=CollectionPolicy.COLLECTED_REQUIRED,
+        retention_period="indefinite",
+    ),
+)
+operations.derive_flags(ctx, ip_class=intake.inputs.ip_class)
+```
+
+Rules key on the **pairing** of an operational fact with material sensitivity,
+because neither alone is decisive. Omit `ip_class` and the sensitivity-dependent
+rules stay silent rather than assuming the worst — guessing produces flags
+nobody can act on.
+
 ## Authorship Evidence
 
 No settled authority defines how much human contribution sustains copyright in

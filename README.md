@@ -85,6 +85,14 @@ Organizations that want acceptance actually gated should express that in a
 default. An organization's own routing table always wins; the authority's
 suggested clearance role fills only a gap the table has no entry for.
 
+Routing is configured per context. Omit `routing_table` for `DEFAULT_ROUTING`;
+pass an empty mapping to switch automatic assignment off entirely:
+
+```python
+UseCaseContext(name="X")                      # default routing
+UseCaseContext(name="X", routing_table={})    # nothing assigned automatically
+```
+
 Terms defined differently by different bodies are held as conflicts rather than
 resolved to one reading:
 

@@ -691,6 +691,25 @@ def _validate_weights(weights: dict[ScorecardDimension, float]) -> None:
         )
 
 
+def _validate_tier_thresholds(thresholds: dict[VendorTier, float]) -> None:
+    """Raise if a threshold map cannot classify every tier.
+
+    Tier lookup indexes this map directly, so a missing entry surfaces as a
+    KeyError from deep inside evaluation rather than as a problem with the
+    argument the caller passed.
+    """
+    missing = [
+        t.value for t in
+        (VendorTier.PREFERRED, VendorTier.APPROVED, VendorTier.CONDITIONAL)
+        if t not in thresholds
+    ]
+    if missing:
+        raise ValueError(
+            f"Tier thresholds must cover every classified tier. "
+            f"Missing: {', '.join(missing)}"
+        )
+
+
 def evaluate_vendor(
     scorecard: VendorScorecard,
     weights: Optional[dict[ScorecardDimension, float]] = None,
@@ -712,9 +731,17 @@ def evaluate_vendor(
             mis-specified table silently produces scores outside 0-100, which
             then flow into tiering as though they were valid.
     """
-    w = weights or DEFAULT_WEIGHTS
+    # `is None`, not a falsy check: an explicitly empty mapping is a
+    # mis-specification here rather than a valid configuration, so let it
+    # reach validation and fail loudly instead of being silently replaced by
+    # the defaults.
+    w = weights if weights is not None else DEFAULT_WEIGHTS
     _validate_weights(w)
-    thresholds = tier_thresholds or DEFAULT_TIER_THRESHOLDS
+    thresholds = (
+        tier_thresholds if tier_thresholds is not None
+        else DEFAULT_TIER_THRESHOLDS
+    )
+    _validate_tier_thresholds(thresholds)
 
     gaps: list[str] = []
     recommendations: list[str] = []

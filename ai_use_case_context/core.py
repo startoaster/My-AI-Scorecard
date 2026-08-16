@@ -336,6 +336,8 @@ class UseCaseContext:
         tags:             Freeform tags for taxonomy/categorization.
         risk_flags:       List of RiskFlag objects.
         routing_table:    Mapping of (dimension, level) -> reviewer role.
+                          Omit it to use :data:`DEFAULT_ROUTING`; pass an empty
+                          mapping to disable automatic assignment entirely.
     """
 
     def __init__(
@@ -349,9 +351,15 @@ class UseCaseContext:
         self.name = name
         self.description = description
         self.workflow_phase = workflow_phase
-        self.tags = tags or []
+        self.tags = list(tags) if tags is not None else []
         self.risk_flags: list[RiskFlag] = []
-        self.routing_table = routing_table or DEFAULT_ROUTING
+        # `is None`, not a falsy check: an empty routing table is a valid
+        # configuration meaning "assign nothing automatically", and is not the
+        # same instruction as "use the defaults".
+        self.routing_table = (
+            dict(routing_table) if routing_table is not None
+            else dict(DEFAULT_ROUTING)
+        )
         self.created_at = datetime.now()
 
     # -- Flagging ----------------------------------------------------------

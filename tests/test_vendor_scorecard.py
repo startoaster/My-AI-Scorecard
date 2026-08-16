@@ -642,3 +642,45 @@ class TestTierFromFlags:
         assert tier_from_flags(ctx) is VendorTier.NOT_APPROVED
         flag.resolve("addressed")
         assert tier_from_flags(ctx) is VendorTier.PREFERRED
+
+
+class TestExplicitEmptyConfiguration:
+    def _scorecard(self):
+        return VendorScorecard(
+            vendor_name="X", data_provenance=DimensionScore(score=100)
+        )
+
+    def test_empty_weights_fail_loudly_rather_than_silently_defaulting(self):
+        # Unlike a routing table, an empty weight map is a mis-specification:
+        # it cannot sum to 1.0. Better a clear error than the defaults.
+        with pytest.raises(ValueError) as exc:
+            evaluate_vendor(self._scorecard(), weights={})
+        assert "sum to 1.0" in str(exc.value)
+
+    def test_empty_thresholds_report_the_missing_tiers(self):
+        with pytest.raises(ValueError) as exc:
+            evaluate_vendor(self._scorecard(), tier_thresholds={})
+        assert "Missing" in str(exc.value)
+
+    def test_partial_thresholds_are_rejected(self):
+        with pytest.raises(ValueError):
+            evaluate_vendor(
+                self._scorecard(),
+                tier_thresholds={VendorTier.PREFERRED: 80.0},
+            )
+
+    def test_complete_custom_thresholds_are_accepted_and_applied(self):
+        sc = self._scorecard()
+        # 100 on one dimension at the default 0.25 weight -> overall 25.0,
+        # which the default thresholds put below CONDITIONAL (40).
+        assert evaluate_vendor(sc).tier is VendorTier.NOT_APPROVED
+        result = evaluate_vendor(
+            sc,
+            tier_thresholds={
+                VendorTier.PREFERRED: 90.0,
+                VendorTier.APPROVED: 50.0,
+                VendorTier.CONDITIONAL: 20.0,
+                VendorTier.NOT_APPROVED: 0.0,
+            },
+        )
+        assert result.tier is VendorTier.CONDITIONAL

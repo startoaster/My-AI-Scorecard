@@ -20,7 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`UseCaseContext.get_unattributed_acceptances()`** — enforceable findings accepted without naming anyone. The replacement for refusing them: findable rather than forbidden.
 - **`ApprovalContext.open_findings_at_decision` and `UseCaseProfile.decision_was_contested()`** — a decision records what was still outstanding when it was taken.
 - **`RiskFlag.is_attributed`** and **`RiskFlag.use_case_name`**, the latter carried into emitted events and serialization.
-- **13 new tests** (576 total).
+- **11 new tests** (587 total).
+
+### Fixed
+
+- **An empty routing table can now be configured.** `UseCaseContext` used `routing_table or DEFAULT_ROUTING`, so passing `{}` silently fell back to the defaults and there was no way to switch automatic assignment off. It now distinguishes "omitted" from "explicitly empty". `tags` gets the same treatment.
+- **Contexts no longer share the global default routing table.** `routing_table` and `tags` are copied on construction, so mutating one context's table no longer reconfigures every other context and `DEFAULT_ROUTING` itself.
+- **`evaluate_vendor()` no longer silently replaces explicitly empty configuration.** An empty `weights` mapping now reaches validation and fails with the existing sum-to-1.0 error instead of being swapped for the defaults. Tier thresholds are validated too: an incomplete map previously surfaced as a `KeyError` from inside tier selection rather than as a problem with the argument passed in.
 
 ### Notes
 

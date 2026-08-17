@@ -33,7 +33,13 @@ import html
 from datetime import datetime, timedelta
 from typing import Callable
 
-from flask import Flask, request, redirect, url_for
+try:
+    from flask import Flask, request, redirect, url_for
+except ModuleNotFoundError as exc:  # pragma: no cover - depends on install extras
+    raise ModuleNotFoundError(
+        "The web dashboard needs Flask, which is not installed by default. "
+        "Install it with: pip install 'ai-use-case-context[web]'"
+    ) from exc
 
 from ai_use_case_context.core import (
     RiskDimension,

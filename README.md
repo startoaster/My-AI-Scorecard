@@ -16,8 +16,7 @@ Full documentation lives in [`docs/`](docs/index.md).
 | [Customising](docs/customising.md) | Your rules, routing, thresholds, vocabularies |
 | [Integration](docs/integration.md) | Events, hooks, persistence, dashboard |
 | [Limitations](docs/limitations.md) | What it deliberately does not do |
-| [Attributions](docs/attributions.md) | External standards, instruments, and influences |
-| [Reference](docs/reference-rules.md) | All 41 rules and every vocabulary *(generated)* |
+| [Reference](docs/reference-rules.md) | All 45 rules and every vocabulary *(generated)* |
 
 The rest of this README is a feature overview. For anything task-shaped, the
 guides are the better starting point.
@@ -284,6 +283,9 @@ sourcing = SourcingProfile(
         source_types=[TrainingDataSource.WEB_CRAWL],
         commitment=SourceCommitment.NONE_STATED,
     ),
+    implementation=ImplementationSource(
+        licensing=CodeLicensing.NOT_STATED,
+    ),
 )
 sourcing.derive_flags(ctx)
 ```
@@ -293,6 +295,23 @@ whether a restriction can be imposed technically or only asked for — user
 discretion is a policy, not a control, and both it and `NOT_SEPARABLE` flag.
 **Source commitment** decides whether an approval granted against today's
 training corpus survives its replacement.
+
+`ImplementationSource` records the rights attached to the **code**, which come
+apart from the rights attached to the weights — a permissively-licensed model
+is routinely published with a reference implementation carrying no licence at
+all, and publication is not permission.
+
+| `CodeLicensing` | Raises |
+|---|---|
+| `NOT_STATED` | High — no grant exists, and none accrues from continued use |
+| `RESTRICTED_USE` | High — non-commercial and field-of-use clauses bite on use, not on distribution |
+| `COPYLEFT_OPEN_SOURCE` | Medium held internally, High once `redistributed=True` |
+| `PERMISSIVE_OPEN_SOURCE`, `CLOSED_SOURCE`, `DEVELOPED_IN_HOUSE` | Nothing |
+
+Copyleft and restricted-use terms are separate classes rather than one
+"restricted" class because they fail differently: copyleft is an obligation
+attaching on distribution, a field-of-use clause is a prohibition biting on use
+before anything ships.
 
 ## Vendor and Provenance Findings
 
@@ -876,15 +895,6 @@ examples/
   serialization_demo.py     JSON persistence
   security_governance.py    TPN/VFX security + governance hooks demo
 ```
-
-## Attributions
-
-Every external standard, regulatory instrument, and published framework this
-project names or draws on is listed in [Attributions](docs/attributions.md),
-along with the authority sources cited by the default rules. Naming a standard
-there records that the framework has somewhere to hold an assessment against
-it — not that any assessment has been made, and not that the body concerned
-endorses or is affiliated with this project.
 
 ## License
 

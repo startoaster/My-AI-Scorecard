@@ -7,7 +7,9 @@ from ai_use_case_context.core import RiskDimension, RiskLevel, UseCaseContext
 from ai_use_case_context.sourcing import (
     AIPosture,
     BYOPolicy,
+    CodeLicensing,
     DEFAULT_SOURCING_RULES,
+    ImplementationSource,
     ModelOrigin,
     ModelProvisioning,
     Packaging,
@@ -229,6 +231,12 @@ class TestSerialization:
                 commitment=SourceCommitment.DATE_BOUND,
                 commitment_date="2030-01-01",
             ),
+            implementation=ImplementationSource(
+                licensing=CodeLicensing.COPYLEFT_OPEN_SOURCE,
+                licence_name="GPL-3.0-only",
+                redistributed=True,
+                notes="n",
+            ),
             notes="n",
         )
         assert SourcingProfile.from_dict(p.to_dict()) == p
@@ -237,3 +245,111 @@ class TestSerialization:
         p = clean()
         p.training_data = TrainingDataProfile()
         assert "(not documented)" in p.summary()
+
+    def test_profile_without_implementation_key_still_loads(self):
+        """Records serialized before the field existed must still deserialize."""
+        data = clean().to_dict()
+        del data["implementation"]
+        restored = SourcingProfile.from_dict(data)
+        assert restored.implementation == ImplementationSource()
+        assert restored.implementation.licensing is CodeLicensing.CLOSED_SOURCE
+
+
+class TestCodeLicensing:
+    def test_only_unlicensed_withholds_usage_rights(self):
+        withheld = [
+            c for c in CodeLicensing if not c.confers_usage_rights
+        ]
+        assert withheld == [CodeLicensing.NOT_STATED]
+
+    def test_only_closed_source_hides_the_source(self):
+        hidden = [c for c in CodeLicensing if not c.is_source_available]
+        assert hidden == [CodeLicensing.CLOSED_SOURCE]
+
+    def test_default_profile_raises_no_implementation_flag(self):
+        ctx = UseCaseContext(name="T")
+        clean().derive_flags(ctx)
+        assert not [
+            f for f in ctx.risk_flags
+            if "implementing" in f.description or "Copyleft" in f.description
+        ]
+
+    def test_unlicensed_code_flags_under_statute(self):
+        p = clean()
+        p.implementation = ImplementationSource(
+            licensing=CodeLicensing.NOT_STATED
+        )
+        ctx = UseCaseContext(name="T")
+        p.derive_flags(ctx)
+        flags = [f for f in ctx.risk_flags if "no licence attached" in f.description]
+        assert len(flags) == 1
+        assert flags[0].level is RiskLevel.HIGH
+        assert flags[0].authority is Authority.STATUTE
+        assert flags[0].dimension is RiskDimension.LEGAL_IP
+
+    def test_copyleft_not_redistributed_is_the_lesser_finding(self):
+        p = clean()
+        p.implementation = ImplementationSource(
+            licensing=CodeLicensing.COPYLEFT_OPEN_SOURCE,
+            licence_name="GPL-3.0-only",
+        )
+        ctx = UseCaseContext(name="T")
+        p.derive_flags(ctx)
+        flags = [f for f in ctx.risk_flags if "copyleft" in f.description]
+        assert len(flags) == 1
+        assert flags[0].level is RiskLevel.MEDIUM
+        assert "GPL-3.0-only" in flags[0].description
+
+    def test_copyleft_redistributed_escalates_and_does_not_double_flag(self):
+        p = clean()
+        p.implementation = ImplementationSource(
+            licensing=CodeLicensing.COPYLEFT_OPEN_SOURCE,
+            redistributed=True,
+        )
+        ctx = UseCaseContext(name="T")
+        p.derive_flags(ctx)
+        flags = [f for f in ctx.risk_flags if "opyleft" in f.description]
+        assert len(flags) == 1
+        assert flags[0].level is RiskLevel.HIGH
+
+    def test_restricted_use_flags_regardless_of_redistribution(self):
+        for shipped in (False, True):
+            p = clean()
+            p.implementation = ImplementationSource(
+                licensing=CodeLicensing.RESTRICTED_USE, redistributed=shipped
+            )
+            ctx = UseCaseContext(name="T")
+            p.derive_flags(ctx)
+            flags = [
+                f for f in ctx.risk_flags if "use restrictions" in f.description
+            ]
+            assert len(flags) == 1, f"redistributed={shipped}"
+            assert flags[0].level is RiskLevel.HIGH
+
+    def test_permissive_and_in_house_raise_nothing(self):
+        for licensing in (
+            CodeLicensing.PERMISSIVE_OPEN_SOURCE,
+            CodeLicensing.DEVELOPED_IN_HOUSE,
+            CodeLicensing.CLOSED_SOURCE,
+        ):
+            p = clean()
+            p.implementation = ImplementationSource(licensing=licensing)
+            ctx = UseCaseContext(name="T")
+            p.derive_flags(ctx)
+            assert not [
+                f for f in ctx.risk_flags
+                if "implementing" in f.description
+            ], licensing
+
+    def test_licence_position_of_code_is_independent_of_the_weights(self):
+        """Permissive weights with unlicensed code still flags."""
+        p = clean()
+        p.model_provisioning = ModelProvisioning(
+            origins=[ModelOrigin.OPEN_WEIGHTS], byo_policy=BYOPolicy.NOT_SUPPORTED
+        )
+        p.implementation = ImplementationSource(
+            licensing=CodeLicensing.NOT_STATED
+        )
+        ctx = UseCaseContext(name="T")
+        p.derive_flags(ctx)
+        assert [f for f in ctx.risk_flags if "no licence attached" in f.description]

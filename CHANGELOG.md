@@ -19,12 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Approval decisions** — `ApprovalSubject` (tool / model / workflow / fine-tuning workflow) and `ApprovalDecision` (approved / approved with constraints / approved for internal testing only / rejected), distinct from per-flag `ReviewStatus`. `record_decision()` records the outcome together with `open_findings_at_decision`, and `decision_was_contested()` reports an approval taken over an open enforceable finding.
 - **Operational characteristics** (`operations.py`) — deployment host, region and update control; data residency and custodian; collection policy and retention; customer model refinement. Rules key on the pairing of an operational fact with material sensitivity, and stay silent when sensitivity is unknown rather than assuming it.
 - **Tool and model sourcing** (`sourcing.py`) — vendor profile and AI posture, packaging and separability, model provisioning and origin, training-data source types and commitment period. Recorded as facts with rules, not scored dimensions.
+- **Software licensing of the implementation** (`sourcing.py`) — `CodeLicensing` and `ImplementationSource` record the rights attached to the *code*, which come apart from the rights attached to the weights: a permissive model is routinely published with a reference implementation carrying no licence at all. Copyleft and restricted-use terms are separate classes because they fail differently — copyleft is an obligation attaching on distribution, a field-of-use clause is a prohibition biting on use. Four rules cover unlicensed code, copyleft held internally, copyleft redistributed, and use-restricted terms.
 - **Vendor findings reach the engine** — `VendorScorecard.derive_flags()` turns recorded copyright facts and unsatisfactory questionnaire responses into authority-carrying flags. `tier_from_flags()` classifies a vendor non-compensatorily from live flag state, reading authority and severity together.
 - **Provenance findings reach the engine** — `ProvenanceCard.derive_flags()` covers licence status, rights-holder reservations, unclassified origin, and synthetic share against the model collapse guard.
 - **Governance events fire from the core API.** `flag_risk()`, `resolve()`, `accept_risk()`, and `begin_review()` emit `GovernanceEvent`s, so hooks see changes regardless of entry point. Previously only `web.py` emitted, which meant the derivation path — now the main way flags are created — bypassed `AuditLogger` and `ComplianceGate` entirely. All four take an `actor` argument; `web.py` passes `"web_dashboard"` and its duplicate emissions are removed, so each action fires exactly once.
 - **`UseCaseContext.get_unattributed_acceptances()`** — enforceable findings accepted without naming anyone. Findable rather than forbidden.
 - **`RiskFlag.is_attributed`** and **`RiskFlag.use_case_name`**, the latter carried into emitted events and serialization.
-- **271 new tests** (598 total, up from 327).
+- **281 new tests** (608 total, up from 327).
 
 ### Changed
 
@@ -47,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **User documentation in [`docs/`](docs/index.md)** — getting started, concepts, task-oriented guides by role, customising, integration, and an explicit limitations page covering every boundary and why it is where it is.
-- **Reference documentation is generated from the code** by `scripts/gen_reference_docs.py`: all 41 default rules with their authority and severity, and every classification enum with its members. A hand-maintained copy of 41 rules would be wrong within a release.
+- **Reference documentation is generated from the code** by `scripts/gen_reference_docs.py`: all 45 default rules with their authority and severity, and every classification enum with its members. A hand-maintained copy of 45 rules would be wrong within a release.
 - **`scripts/check_doc_examples.py`** executes every Python block in the docs the way a reader following along would — each document's blocks share a namespace, in order — so a snippet that depends on something never shown fails in CI rather than in a reader's terminal.
 
 ### Notes

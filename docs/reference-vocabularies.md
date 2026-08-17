@@ -261,6 +261,19 @@ Whether individual AI capabilities can be governed independently.
 | `USER_DISCRETION` | Left to user discretion under guideline |
 | `NOT_SEPARABLE` | Capabilities are integrated and cannot be separated |
 
+### `CodeLicensing`
+
+Rights attached to the software implementing the capability.
+
+| Member | Value |
+| --- | --- |
+| `NOT_STATED` | Source available with no licence attached |
+| `PERMISSIVE_OPEN_SOURCE` | Permissive open-source licence |
+| `COPYLEFT_OPEN_SOURCE` | Copyleft open-source licence |
+| `RESTRICTED_USE` | Source available under use restrictions |
+| `CLOSED_SOURCE` | Source not available |
+| `DEVELOPED_IN_HOUSE` | Developed in-house |
+
 ### `ModelOrigin`
 
 Where a model came from.

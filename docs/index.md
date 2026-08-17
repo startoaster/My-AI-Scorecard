@@ -13,6 +13,7 @@ anything itself.
 | Understand the design | [Concepts](concepts.md) |
 | Do a specific job | [Guides](guides.md) |
 | Know what it won't do | [Limitations](limitations.md) |
+| Know what it draws on | [Attributions](attributions.md) |
 
 ## By role
 
@@ -39,6 +40,7 @@ first. It is the most honest page here.
 - **[Customising](customising.md)** — routing, rules, sensitivity, thresholds, dimensions, lexicon, vocabularies
 - **[Integration](integration.md)** — governance events, hooks, persistence, portfolio views, escalation, the dashboard
 - **[Limitations](limitations.md)** — every boundary, and why it is where it is
+- **[Attributions](attributions.md)** — every external standard, instrument, and influence
 - **[Reference: rules](reference-rules.md)** — all 41 default rules *(generated)*
 - **[Reference: vocabularies](reference-vocabularies.md)** — every classification enum *(generated)*
 

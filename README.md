@@ -16,6 +16,7 @@ Full documentation lives in [`docs/`](docs/index.md).
 | [Customising](docs/customising.md) | Your rules, routing, thresholds, vocabularies |
 | [Integration](docs/integration.md) | Events, hooks, persistence, dashboard |
 | [Limitations](docs/limitations.md) | What it deliberately does not do |
+| [Attributions](docs/attributions.md) | External standards, instruments, and influences |
 | [Reference](docs/reference-rules.md) | All 41 rules and every vocabulary *(generated)* |
 
 The rest of this README is a feature overview. For anything task-shaped, the
@@ -875,6 +876,15 @@ examples/
   serialization_demo.py     JSON persistence
   security_governance.py    TPN/VFX security + governance hooks demo
 ```
+
+## Attributions
+
+Every external standard, regulatory instrument, and published framework this
+project names or draws on is listed in [Attributions](docs/attributions.md),
+along with the authority sources cited by the default rules. Naming a standard
+there records that the framework has somewhere to hold an assessment against
+it — not that any assessment has been made, and not that the body concerned
+endorses or is affiliated with this project.
 
 ## License
 

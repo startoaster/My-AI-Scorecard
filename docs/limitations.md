@@ -137,3 +137,16 @@ gates a decision.
   Act assessments still produce scores and string gaps that nothing consumes,
   and must be transcribed by hand into flags. The other assessment modules have
   been converted; this one has not yet.
+- **Software licensing of the tool itself.** `sourcing.py` records where the
+  weights came from and how the tool is packaged, and `ModelOrigin` carries the
+  licence position of the *model*. Nothing records the licence on the
+  *implementing source code* — permissive, restrictive, closed, or absent
+  altogether. An unlicensed reference implementation from a paper confers no
+  usage rights at all, and the framework currently has nowhere to say so.
+
+## What it draws on
+
+Where a rule cites a statute, an agreement, or a standard, the source travels
+with the finding on its `AuthoritySource`. [Attributions](attributions.md)
+rolls all of them up, together with the external frameworks that influenced
+the design. Naming a standard there is not a claim of conformance with it.

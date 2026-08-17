@@ -24,11 +24,11 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/startoaster/AI-Scorecard"
-Repository = "https://github.com/startoaster/AI-Scorecard"
-Documentation = "https://github.com/startoaster/AI-Scorecard/blob/main/docs/index.md"
-Changelog = "https://github.com/startoaster/AI-Scorecard/blob/main/CHANGELOG.md"
-Issues = "https://github.com/startoaster/AI-Scorecard/issues"
+Homepage = "https://github.com/startoaster/My-AI-Scorecard"
+Repository = "https://github.com/startoaster/My-AI-Scorecard"
+Documentation = "https://github.com/startoaster/My-AI-Scorecard/blob/main/docs/index.md"
+Changelog = "https://github.com/startoaster/My-AI-Scorecard/blob/main/CHANGELOG.md"
+Issues = "https://github.com/startoaster/My-AI-Scorecard/issues"
 
 [project.optional-dependencies]
 web = ["flask>=3.0"]

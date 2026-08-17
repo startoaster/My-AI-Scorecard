@@ -158,4 +158,3 @@ Expect the crosswalks, not a migration.
   Act assessments still produce scores and string gaps that nothing consumes,
   and must be transcribed by hand into flags. The other assessment modules have
   been converted; this one has not yet.
-

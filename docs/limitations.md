@@ -125,6 +125,27 @@ rate a vendor in active copyright litigation as `PREFERRED`. Use
 `VendorScorecard.derive_flags()` and `tier_from_flags()` for anything that
 gates a decision.
 
+## It is not the last word, and knows it
+
+Both the Visual Effects Society and MovieLabs have work in progress on
+classifying and communicating AI use in production. That work is unpublished
+at the time of writing, and nothing from it is reflected here — but it is
+reasonable to expect that some of what this framework names, the industry will
+eventually name differently, and with more standing behind it.
+
+Two design choices exist so that adopting a published vocabulary later is a
+data change rather than a rewrite:
+
+- **Nothing in the logic keys on external names.** Rules, routing, and storage
+  use this project's own enum members. A `VocabularyMapping` crosswalks them
+  onto anyone else's terms without touching any of it. See
+  [Customising](customising.md).
+- **Classes are finely split.** Where an external vocabulary merges two of
+  ours, the crosswalk maps both onto its one term. Merging is always
+  expressible after the fact; splitting is not.
+
+Expect the crosswalks, not a migration.
+
 ## What it does not cover at all
 
 - **Agentic workflows** — planning, orchestration, and tool selection performed

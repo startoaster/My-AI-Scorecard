@@ -206,6 +206,8 @@ from ai_use_case_context.sourcing import (
     Packaging,
     Separability,
     ToolPackaging,
+    CodeLicensing,
+    ImplementationSource,
     ModelOrigin,
     BYOPolicy,
     ModelProvisioning,
@@ -411,6 +413,8 @@ __all__ = [
     "TrainingDataSource",
     "SourceCommitment",
     "TrainingDataProfile",
+    "CodeLicensing",
+    "ImplementationSource",
     "SourcingRule",
     "SourcingProfile",
     "DEFAULT_SOURCING_RULES",
@@ -432,4 +436,4 @@ __all__ = [
     "DEFAULT_VENDOR_RULES",
 ]
 
-__version__ = "2.0.0a1"
+__version__ = "2.0.0b1"

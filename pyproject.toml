@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-use-case-context"
-version = "2.0.0a1"
+version = "2.0.0b1"
 description = "A generalizable governance framework for AI-driven media production use cases"
+readme = "README.md"
+authors = [{ name = "startoaster" }]
 requires-python = ">=3.9"
 license = "Apache-2.0"
 keywords = ["ai", "governance", "media", "production", "risk", "compliance"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -20,6 +22,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+
+[project.urls]
+Homepage = "https://github.com/startoaster/My-AI-Scorecard"
+Repository = "https://github.com/startoaster/My-AI-Scorecard"
+Documentation = "https://github.com/startoaster/My-AI-Scorecard/blob/main/docs/index.md"
+Changelog = "https://github.com/startoaster/My-AI-Scorecard/blob/main/CHANGELOG.md"
+Issues = "https://github.com/startoaster/My-AI-Scorecard/issues"
 
 [project.optional-dependencies]
 web = ["flask>=3.0"]

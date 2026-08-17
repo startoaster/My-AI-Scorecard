@@ -1,5 +1,16 @@
 name: Tag Release
 
+# Tags main with v<version> from pyproject.toml, then builds and publishes
+# the release in the same run.
+#
+# The build must happen here rather than in release.yml. A tag created with
+# the default GITHUB_TOKEN does not trigger further workflow runs, so
+# release.yml (on: push: tags) never fires for a tag this job creates. That
+# is why v2.0.0a1 has a tag and a hand-made release but no build artifacts:
+# release.yml has only ever run for v1.1.0, whose tag a human pushed.
+#
+# release.yml is kept for that human-pushed path and still works there.
+
 on:
   push:
     branches:
@@ -16,6 +27,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Extract version from pyproject.toml
         id: version
@@ -38,6 +54,20 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'false'
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        if: steps.check.outputs.exists == 'false'
+        run: pytest
+
+      - name: Build package
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          pip install build
+          python -m build
+
       - name: Create tag via API
         if: steps.check.outputs.exists == 'false'
         env:
@@ -47,3 +77,12 @@ jobs:
             --method POST \
             -f ref="refs/tags/${{ steps.version.outputs.tag }}" \
             -f sha="${{ github.sha }}"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          prerelease: ${{ contains(steps.version.outputs.version, 'a') || contains(steps.version.outputs.version, 'b') || contains(steps.version.outputs.version, 'rc') }}
+          files: dist/*

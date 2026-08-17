@@ -30,9 +30,16 @@ jobs:
           pip install build
           python -m build
 
+      # The version, not the ref. `contains(github.ref, 'a')` was always true,
+      # because the ref is refs/tags/... and "tags" contains an 'a' — so every
+      # release was marked a prerelease, finals included.
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref, 'a') || contains(github.ref, 'b') || contains(github.ref, 'rc') }}
+          prerelease: ${{ contains(steps.version.outputs.version, 'a') || contains(steps.version.outputs.version, 'b') || contains(steps.version.outputs.version, 'rc') }}
           files: dist/*

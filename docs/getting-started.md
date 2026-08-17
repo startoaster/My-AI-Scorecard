@@ -192,5 +192,5 @@ python examples/capability_derivation.py
 
 - [Concepts](concepts.md) — the mental model, and the three decisions that shape everything
 - [Guides](guides.md) — task-oriented walkthroughs by role
-- [Reference: rules](reference-rules.md) — all 41 default rules
+- [Reference: rules](reference-rules.md) — all 45 default rules
 - [Limitations](limitations.md) — what this deliberately does not do

@@ -1,6 +1,6 @@
 # AI Use Case Context Framework
 
-> **v2.0.0-alpha.1** — This is a pre-release. APIs may change before the stable 2.0.0 release. See the [changelog](CHANGELOG.md) for breaking changes from v1.x.
+> **v2.0.0b1** — Beta. The API is feature-complete for 2.0 but not yet frozen; it may still change before the stable 2.0.0 release. See the [changelog](CHANGELOG.md) for breaking changes from v1.x, and [Limitations](docs/limitations.md) for what the framework deliberately does not do.
 
 A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
@@ -16,7 +16,7 @@ Full documentation lives in [`docs/`](docs/index.md).
 | [Customising](docs/customising.md) | Your rules, routing, thresholds, vocabularies |
 | [Integration](docs/integration.md) | Events, hooks, persistence, dashboard |
 | [Limitations](docs/limitations.md) | What it deliberately does not do |
-| [Reference](docs/reference-rules.md) | All 41 rules and every vocabulary *(generated)* |
+| [Reference](docs/reference-rules.md) | All 45 rules and every vocabulary *(generated)* |
 
 The rest of this README is a feature overview. For anything task-shaped, the
 guides are the better starting point.
@@ -283,6 +283,9 @@ sourcing = SourcingProfile(
         source_types=[TrainingDataSource.WEB_CRAWL],
         commitment=SourceCommitment.NONE_STATED,
     ),
+    implementation=ImplementationSource(
+        licensing=CodeLicensing.NOT_STATED,
+    ),
 )
 sourcing.derive_flags(ctx)
 ```
@@ -292,6 +295,23 @@ whether a restriction can be imposed technically or only asked for — user
 discretion is a policy, not a control, and both it and `NOT_SEPARABLE` flag.
 **Source commitment** decides whether an approval granted against today's
 training corpus survives its replacement.
+
+`ImplementationSource` records the rights attached to the **code**, which come
+apart from the rights attached to the weights — a permissively-licensed model
+is routinely published with a reference implementation carrying no licence at
+all, and publication is not permission.
+
+| `CodeLicensing` | Raises |
+|---|---|
+| `NOT_STATED` | High — no grant exists, and none accrues from continued use |
+| `RESTRICTED_USE` | High — non-commercial and field-of-use clauses bite on use, not on distribution |
+| `COPYLEFT_OPEN_SOURCE` | Medium held internally, High once `redistributed=True` |
+| `PERMISSIVE_OPEN_SOURCE`, `CLOSED_SOURCE`, `DEVELOPED_IN_HOUSE` | Nothing |
+
+Copyleft and restricted-use terms are separate classes rather than one
+"restricted" class because they fail differently: copyleft is an obligation
+attaching on distribution, a field-of-use clause is a prohibition biting on use
+before anything ships.
 
 ## Vendor and Provenance Findings
 

@@ -39,7 +39,7 @@ first. It is the most honest page here.
 - **[Customising](customising.md)** — routing, rules, sensitivity, thresholds, dimensions, lexicon, vocabularies
 - **[Integration](integration.md)** — governance events, hooks, persistence, portfolio views, escalation, the dashboard
 - **[Limitations](limitations.md)** — every boundary, and why it is where it is
-- **[Reference: rules](reference-rules.md)** — all 41 default rules *(generated)*
+- **[Reference: rules](reference-rules.md)** — all 45 default rules *(generated)*
 - **[Reference: vocabularies](reference-vocabularies.md)** — every classification enum *(generated)*
 
 The two reference pages are generated from the code by

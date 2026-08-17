@@ -142,6 +142,75 @@ class ToolPackaging:
 
 
 # ---------------------------------------------------------------------------
+# Implementing software
+# ---------------------------------------------------------------------------
+
+class CodeLicensing(Enum):
+    """Rights attached to the software implementing the capability.
+
+    Separate from :class:`ModelOrigin`, which carries the licence position of
+    the *weights*. The two come apart routinely: a permissively-licensed model
+    is often published with a reference implementation carrying no licence at
+    all, and a closed vendor service is closed code running open weights.
+
+    Copyleft and restricted-use terms are kept apart rather than merged into
+    one "restricted" class because they fail differently. Copyleft is an
+    obligation that attaches on distribution — you may use it freely and still
+    owe something when you ship. A field-of-use or non-commercial clause is a
+    prohibition that bites on use, before anything ships at all.
+    """
+    NOT_STATED = "Source available with no licence attached"
+    PERMISSIVE_OPEN_SOURCE = "Permissive open-source licence"
+    COPYLEFT_OPEN_SOURCE = "Copyleft open-source licence"
+    RESTRICTED_USE = "Source available under use restrictions"
+    CLOSED_SOURCE = "Source not available"
+    DEVELOPED_IN_HOUSE = "Developed in-house"
+
+    @property
+    def confers_usage_rights(self) -> bool:
+        """False where no permission has been granted at all.
+
+        Publication is not permission. Source posted to a code-hosting site
+        with no licence attached carries the default position under copyright,
+        which is that no one may copy, modify, or use it.
+        """
+        return self is not CodeLicensing.NOT_STATED
+
+
+@dataclass
+class ImplementationSource:
+    """The licence position of the software, not of the weights.
+
+    ``redistributed`` records whether the implementing code leaves the
+    organization — shipped in a product, delivered to a client, or bundled
+    into a deliverable. Several licence obligations attach on distribution and
+    on nothing else, so the same licence is a different question depending on
+    this field.
+    """
+    licensing: CodeLicensing = CodeLicensing.CLOSED_SOURCE
+    license_name: str = ""
+    redistributed: bool = False
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "licensing": self.licensing.name,
+            "license_name": self.license_name,
+            "redistributed": self.redistributed,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ImplementationSource":
+        return cls(
+            licensing=CodeLicensing[data.get("licensing", "CLOSED_SOURCE")],
+            license_name=data.get("license_name", ""),
+            redistributed=bool(data.get("redistributed", False)),
+            notes=data.get("notes", ""),
+        )
+
+
+# ---------------------------------------------------------------------------
 # Model provisioning
 # ---------------------------------------------------------------------------
 
@@ -291,6 +360,18 @@ _UPSTREAM_MODEL_TERMS = AuthoritySource(
     citation="Terms of the model this one was derived from",
 )
 
+_NO_LICENCE_GRANTED = AuthoritySource(
+    body="Copyright law",
+    authority=Authority.STATUTE,
+    citation="Absent a licence, no permission to copy, modify, or use exists",
+)
+
+_IMPLEMENTATION_LICENCE = AuthoritySource(
+    body="Software licence terms",
+    authority=Authority.BINDING_CONTRACT,
+    citation="Terms of the licence on the implementing source code",
+)
+
 
 DEFAULT_SOURCING_RULES: list[SourcingRule] = [
     SourcingRule(
@@ -398,6 +479,80 @@ DEFAULT_SOURCING_RULES: list[SourcingRule] = [
         ),
     ),
     SourcingRule(
+        rule_id="IMPLEMENTATION_UNLICENSED",
+        title="Implementing code carries no licence",
+        applies=lambda p: not p.implementation.licensing.confers_usage_rights,
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        authority=Authority.STATUTE,
+        source=_NO_LICENCE_GRANTED,
+        describe=lambda p: (
+            "The implementing source code has no licence attached. Public "
+            "availability is not permission: absent a grant, there is no right "
+            "to copy, modify, or use it, and none can be acquired by "
+            "continuing to use it."
+        ),
+    ),
+    SourcingRule(
+        rule_id="COPYLEFT_IMPLEMENTATION_LICENCE",
+        title="Implementing code is under a copyleft licence",
+        applies=lambda p: (
+            p.implementation.licensing is CodeLicensing.COPYLEFT_OPEN_SOURCE
+            and not p.implementation.redistributed
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.MEDIUM,
+        authority=Authority.BINDING_CONTRACT,
+        source=_IMPLEMENTATION_LICENCE,
+        describe=lambda p: (
+            "The implementing code is under a copyleft licence"
+            + (f" ({p.implementation.license_name})"
+               if p.implementation.license_name else "")
+            + ". Nothing is recorded as redistributed, so no obligation is "
+            "engaged yet. Confirm the position before the code leaves the "
+            "organization in any form."
+        ),
+    ),
+    SourcingRule(
+        rule_id="COPYLEFT_CODE_REDISTRIBUTED",
+        title="Copyleft code leaves the organization",
+        applies=lambda p: (
+            p.implementation.licensing is CodeLicensing.COPYLEFT_OPEN_SOURCE
+            and p.implementation.redistributed
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        authority=Authority.BINDING_CONTRACT,
+        source=_IMPLEMENTATION_LICENCE,
+        describe=lambda p: (
+            "Copyleft-licensed code"
+            + (f" ({p.implementation.license_name})"
+               if p.implementation.license_name else "")
+            + " is recorded as redistributed. Reciprocal obligations attach on "
+            "distribution and may reach code combined with it. Confirm the "
+            "scope against the distribution model before delivery."
+        ),
+    ),
+    SourcingRule(
+        rule_id="RESTRICTED_USE_IMPLEMENTATION",
+        title="Implementing code restricts how it may be used",
+        applies=lambda p: (
+            p.implementation.licensing is CodeLicensing.RESTRICTED_USE
+        ),
+        dimension=RiskDimension.LEGAL_IP,
+        level=RiskLevel.HIGH,
+        authority=Authority.BINDING_CONTRACT,
+        source=_IMPLEMENTATION_LICENCE,
+        describe=lambda p: (
+            "The implementing code is licensed with use restrictions"
+            + (f" ({p.implementation.license_name})"
+               if p.implementation.license_name else "")
+            + ". Non-commercial, research-only, and field-of-use clauses bite "
+            "on use rather than on distribution, so the restriction applies "
+            "whether or not anything ships."
+        ),
+    ),
+    SourcingRule(
         rule_id="UNRESTRICTED_BYO_MODELS",
         title="Arbitrary customer-supplied models accepted",
         applies=lambda p: (
@@ -429,6 +584,9 @@ class SourcingProfile:
     training_data: TrainingDataProfile = field(
         default_factory=TrainingDataProfile
     )
+    implementation: ImplementationSource = field(
+        default_factory=ImplementationSource
+    )
     notes: str = ""
 
     def derive_flags(
@@ -459,6 +617,7 @@ class SourcingProfile:
             "packaging": self.packaging.to_dict(),
             "model_provisioning": self.model_provisioning.to_dict(),
             "training_data": self.training_data.to_dict(),
+            "implementation": self.implementation.to_dict(),
             "notes": self.notes,
         }
 
@@ -471,6 +630,9 @@ class SourcingProfile:
                 data["model_provisioning"]
             ),
             training_data=TrainingDataProfile.from_dict(data["training_data"]),
+            implementation=ImplementationSource.from_dict(
+                data.get("implementation", {})
+            ),
             notes=data.get("notes", ""),
         )
 
@@ -489,6 +651,10 @@ class SourcingProfile:
             ),
             f"Commitment:   {td.commitment.value}"
             + (f" ({td.commitment_date})" if td.commitment_date else ""),
+            f"Code licence: {self.implementation.licensing.value}"
+            + (f" ({self.implementation.license_name})"
+               if self.implementation.license_name else "")
+            + (" — redistributed" if self.implementation.redistributed else ""),
         ])
 
     def __str__(self) -> str:

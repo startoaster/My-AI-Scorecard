@@ -233,7 +233,7 @@ class TestSerialization:
             ),
             implementation=ImplementationSource(
                 licensing=CodeLicensing.COPYLEFT_OPEN_SOURCE,
-                licence_name="GPL-3.0-only",
+                license_name="GPL-3.0-only",
                 redistributed=True,
                 notes="n",
             ),
@@ -262,10 +262,6 @@ class TestCodeLicensing:
         ]
         assert withheld == [CodeLicensing.NOT_STATED]
 
-    def test_only_closed_source_hides_the_source(self):
-        hidden = [c for c in CodeLicensing if not c.is_source_available]
-        assert hidden == [CodeLicensing.CLOSED_SOURCE]
-
     def test_default_profile_raises_no_implementation_flag(self):
         ctx = UseCaseContext(name="T")
         clean().derive_flags(ctx)
@@ -291,7 +287,7 @@ class TestCodeLicensing:
         p = clean()
         p.implementation = ImplementationSource(
             licensing=CodeLicensing.COPYLEFT_OPEN_SOURCE,
-            licence_name="GPL-3.0-only",
+            license_name="GPL-3.0-only",
         )
         ctx = UseCaseContext(name="T")
         p.derive_flags(ctx)

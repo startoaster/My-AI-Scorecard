@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Governance events fire from the core API.** `flag_risk()`, `resolve()`, `accept_risk()`, and `begin_review()` emit `GovernanceEvent`s, so hooks see changes regardless of entry point. Previously only `web.py` emitted, which meant the derivation path — now the main way flags are created — bypassed `AuditLogger` and `ComplianceGate` entirely. All four take an `actor` argument; `web.py` passes `"web_dashboard"` and its duplicate emissions are removed, so each action fires exactly once.
 - **`UseCaseContext.get_unattributed_acceptances()`** — enforceable findings accepted without naming anyone. Findable rather than forbidden.
 - **`RiskFlag.is_attributed`** and **`RiskFlag.use_case_name`**, the latter carried into emitted events and serialization.
-- **281 new tests** (608 total, up from 327).
+- **280 new tests** (607 total, up from 327).
 
 ### Changed
 

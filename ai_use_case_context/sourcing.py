@@ -167,10 +167,6 @@ class CodeLicensing(Enum):
     DEVELOPED_IN_HOUSE = "Developed in-house"
 
     @property
-    def is_source_available(self) -> bool:
-        return self is not CodeLicensing.CLOSED_SOURCE
-
-    @property
     def confers_usage_rights(self) -> bool:
         """False where no permission has been granted at all.
 
@@ -192,14 +188,14 @@ class ImplementationSource:
     this field.
     """
     licensing: CodeLicensing = CodeLicensing.CLOSED_SOURCE
-    licence_name: str = ""
+    license_name: str = ""
     redistributed: bool = False
     notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "licensing": self.licensing.name,
-            "licence_name": self.licence_name,
+            "license_name": self.license_name,
             "redistributed": self.redistributed,
             "notes": self.notes,
         }
@@ -208,7 +204,7 @@ class ImplementationSource:
     def from_dict(cls, data: dict[str, Any]) -> "ImplementationSource":
         return cls(
             licensing=CodeLicensing[data.get("licensing", "CLOSED_SOURCE")],
-            licence_name=data.get("licence_name", ""),
+            license_name=data.get("license_name", ""),
             redistributed=bool(data.get("redistributed", False)),
             notes=data.get("notes", ""),
         )
@@ -510,8 +506,8 @@ DEFAULT_SOURCING_RULES: list[SourcingRule] = [
         source=_IMPLEMENTATION_LICENCE,
         describe=lambda p: (
             "The implementing code is under a copyleft licence"
-            + (f" ({p.implementation.licence_name})"
-               if p.implementation.licence_name else "")
+            + (f" ({p.implementation.license_name})"
+               if p.implementation.license_name else "")
             + ". Nothing is recorded as redistributed, so no obligation is "
             "engaged yet. Confirm the position before the code leaves the "
             "organization in any form."
@@ -530,8 +526,8 @@ DEFAULT_SOURCING_RULES: list[SourcingRule] = [
         source=_IMPLEMENTATION_LICENCE,
         describe=lambda p: (
             "Copyleft-licensed code"
-            + (f" ({p.implementation.licence_name})"
-               if p.implementation.licence_name else "")
+            + (f" ({p.implementation.license_name})"
+               if p.implementation.license_name else "")
             + " is recorded as redistributed. Reciprocal obligations attach on "
             "distribution and may reach code combined with it. Confirm the "
             "scope against the distribution model before delivery."
@@ -549,8 +545,8 @@ DEFAULT_SOURCING_RULES: list[SourcingRule] = [
         source=_IMPLEMENTATION_LICENCE,
         describe=lambda p: (
             "The implementing code is licensed with use restrictions"
-            + (f" ({p.implementation.licence_name})"
-               if p.implementation.licence_name else "")
+            + (f" ({p.implementation.license_name})"
+               if p.implementation.license_name else "")
             + ". Non-commercial, research-only, and field-of-use clauses bite "
             "on use rather than on distribution, so the restriction applies "
             "whether or not anything ships."
@@ -656,8 +652,8 @@ class SourcingProfile:
             f"Commitment:   {td.commitment.value}"
             + (f" ({td.commitment_date})" if td.commitment_date else ""),
             f"Code licence: {self.implementation.licensing.value}"
-            + (f" ({self.implementation.licence_name})"
-               if self.implementation.licence_name else "")
+            + (f" ({self.implementation.license_name})"
+               if self.implementation.license_name else "")
             + (" — redistributed" if self.implementation.redistributed else ""),
         ])
 

@@ -9,9 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.0.1] - 2026-08-18
+
+Documentation correction. No code change to the framework itself.
+
+### Fixed
+
+- **The dimension table in 2.0.0 overstated coverage.** `BIAS` and `SAFETY`
+  were listed with scope descriptions — "demographic fairness", "harmful,
+  misleading, or unsafe model outputs" — as though the framework produced
+  findings in them. It does not, and never has: no default rule targets
+  either. The README, the `RiskDimension` docstring, the package docstring,
+  and [Limitations](docs/limitations.md) now mark both as empty slots and say
+  why. Assessing representational harm or harmful output needs evidence about
+  model behaviour that this framework does not collect; it records supply,
+  deployment, and output-role facts. Per-dimension rule counts are pinned by
+  tests so the published numbers cannot drift again.
+- **The dimension set is documented as a convention**, not a sourced taxonomy.
+  No standards body supplies this partition. Rules carry an `AuthoritySource`;
+  the dimensions carry nothing, and the docs no longer imply otherwise.
+
+### Added
+
+- **A note on the name** in the README — why the repository is My AI Scorecard
+  while the package is `ai-use-case-context`. The scorecard premise was
+  replaced because a weighted composite is compensatory; the package name
+  describes what was built instead.
+- **`publish-pypi.yml`** — publishes an already-tagged version and nothing
+  else. `tag-release.yml` skips wholesale once the tag exists, so a PyPI upload
+  that fails on its own could not be retried through it. Refuses to run if the
+  tag does not match the version in `pyproject.toml`.
+
+### Note
+
+2.0.0 published a GitHub Release but never reached PyPI: the upload failed with
+`invalid-publisher` because no trusted publisher matched the OIDC claims. No
+package was published under that version.
+
 ## [2.0.0] - 2026-08-18
 
 First release published to PyPI: `pip install ai-use-case-context`. `tag-release.yml` uploads via trusted publishing, as the last step after the tag and GitHub Release — a PyPI version cannot be deleted and re-uploaded, so a failure there leaves a recoverable state rather than burning the version number.
+
+**Two dimensions are documented as empty.** `BIAS` and `SAFETY` carry no default rules and never did — the README described their scope as though the framework covered them. It does not: assessing representational harm or harmful output needs evidence about model behaviour that this framework does not collect. Both are now marked as empty slots in the README, in `RiskDimension`, and in the limitations page, and the count is pinned by a test. The dimension set as a whole is documented as a convention rather than a sourced taxonomy.
+
+**The package name is explained rather than changed.** The repository is My AI Scorecard; the package is `ai-use-case-context`. A README section covers why — the scorecard premise was replaced because a weighted composite is compensatory, and the package name describes what was built instead.
 
 Promotes `2.0.0b1` to stable. No functional change: the beta shipped the complete 2.0 surface and nothing was altered between the two. Version, development-status classifier, and README banner only.
 

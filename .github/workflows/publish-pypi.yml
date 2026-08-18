@@ -1,0 +1,68 @@
+name: Publish to PyPI
+
+# Publishes an already-tagged version to PyPI. Nothing else — no tagging,
+# no GitHub Release.
+#
+# tag-release.yml does both on merge, but it skips everything when the tag
+# already exists. So when the PyPI step fails on its own (a trusted-publisher
+# mismatch, a PyPI outage) the tag and Release are already in place and there
+# is no way to retry the upload through that workflow. This is that retry.
+#
+# Builds from the tag rather than reusing the Release assets, so the upload is
+# reproduced from source at that commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v2.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write   # PyPI trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Confirm the tag matches the version in pyproject.toml
+        run: |
+          VERSION=$(python3 -c "
+          import re
+          with open('pyproject.toml') as f:
+              print(re.search(r'version\s*=\s*\"(.+?)\"', f.read()).group(1))
+          ")
+          EXPECTED="v$VERSION"
+          if [ "${{ inputs.tag }}" != "$EXPECTED" ]; then
+            echo "::error::Tag ${{ inputs.tag }} does not match pyproject version $VERSION (expected $EXPECTED)."
+            exit 1
+          fi
+          echo "Publishing $VERSION from ${{ inputs.tag }}"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest
+
+      - name: Build package
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

@@ -29,7 +29,22 @@ from ai_use_case_context.governance_hooks import (
 # ---------------------------------------------------------------------------
 
 class RiskDimension(Enum):
-    """The six built-in governance dimensions."""
+    """The six built-in governance dimensions.
+
+    A convention, not a sourced taxonomy. No standards body supplies this
+    partition, and the framework does not claim one does — unlike a
+    :class:`~ai_use_case_context.authority.AuthoritySource` on a rule, which
+    names what stands behind that finding. Treat these as a starting shape and
+    add your own with
+    :func:`~ai_use_case_context.core.custom_dimension`.
+
+    Two of the six carry **no default rules**. ``BIAS`` and ``SAFETY`` name
+    real concerns, but the framework derives nothing into them: assessing
+    representational harm or harmful output needs evidence about model
+    behaviour that this framework does not collect, and asserting a finding
+    without that evidence would be the guesswork the design exists to avoid.
+    They remain available for your own rules and for flags raised by hand.
+    """
     LEGAL_IP = "Legal / IP Ownership"
     BIAS = "Bias / Fairness"
     SAFETY = "Safety / Harmful Output"

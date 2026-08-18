@@ -3,13 +3,21 @@ AI Use Case Context Framework
 ==============================
 A generalizable governance model for AI-driven media production use cases.
 
-Provides flag, route, and block capabilities across six core risk dimensions:
-  - Legal / IP Ownership
-  - Bias / Fairness
-  - Safety / Harmful Output
-  - Security / Model Integrity
-  - Technical Feasibility
-  - Output Quality
+Provides flag, route, and block capabilities across six core risk dimensions.
+Four carry default rules:
+  - Legal / IP Ownership       (29 rules)
+  - Security / Model Integrity  (8 rules)
+  - Technical Feasibility       (4 rules)
+  - Output Quality              (4 rules)
+
+Two are empty slots, available for your own rules and for flags raised by
+hand. Nothing here derives into them, because assessing them needs evidence
+about model behaviour that this framework does not collect:
+  - Bias / Fairness             (0 rules)
+  - Safety / Harmful Output     (0 rules)
+
+The dimension set is a convention, not a sourced taxonomy. Rules carry an
+Authority naming what stands behind each finding; the dimensions do not.
 
 Plus configurable security dimensions aligned with industry standards:
   - **TPN** (Trusted Partner Network / MPA Content Security)
@@ -436,4 +444,4 @@ __all__ = [
     "DEFAULT_VENDOR_RULES",
 ]
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"

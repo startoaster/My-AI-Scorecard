@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # PyPI trusted publishing
 
 jobs:
   tag:
@@ -86,3 +87,16 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(steps.version.outputs.version, 'a') || contains(steps.version.outputs.version, 'b') || contains(steps.version.outputs.version, 'rc') }}
           files: dist/*
+
+      # Last, deliberately. A PyPI upload cannot be deleted and re-uploaded —
+      # the version is burned for good. Tag and GitHub Release come first so
+      # that a PyPI failure leaves a recoverable state (retry by hand with
+      # twine) rather than a version number that can never be published.
+      #
+      # Requires a Trusted Publisher on PyPI for this repo and workflow:
+      # https://pypi.org/manage/account/publishing/
+      - name: Publish to PyPI
+        if: steps.check.outputs.exists == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

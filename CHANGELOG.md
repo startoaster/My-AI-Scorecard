@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.0.0] - 2026-08-18
+
+First release published to PyPI: `pip install ai-use-case-context`. `tag-release.yml` uploads via trusted publishing, as the last step after the tag and GitHub Release — a PyPI version cannot be deleted and re-uploaded, so a failure there leaves a recoverable state rather than burning the version number.
+
+Promotes `2.0.0b1` to stable. No functional change: the beta shipped the complete 2.0 surface and nothing was altered between the two. Version, development-status classifier, and README banner only.
+
+The API is now frozen for 2.x. `compliance.py` is stable in its current shape, which means it still records ISO 42001, NIST AI RMF and EU AI Act assessments without deriving flags from them — documented in [Limitations](docs/limitations.md) and unchanged by this release.
+
 ## [2.0.0b1] - 2026-08-17
 
 ### Added
@@ -33,7 +41,7 @@ Nothing yet.
 
 ### Changed
 
-- **The framework records; it does not refuse.** An interim version had `accept_risk()` reject an unattributed acceptance of an enforceable finding, and `record_decision()` reject an approval taken over one. Neither shipped in a release, and both are gone: standing comes from an organization's delegation of authority and its identity systems, which a library cannot see, and either check was bypassable by assigning `status` directly. `ClearanceError` and `ApprovalError` do not exist. Enforcement belongs in a `GovernanceHook` — `ComplianceGate` exists for exactly this.
+- **The framework records; it does not refuse.** `accept_risk()` and `record_decision()` never reject: standing comes from an organization's delegation of authority and its identity systems, which a library cannot see, and either check was bypassable by assigning `status` directly. `ClearanceError` and `ApprovalError` do not exist. Enforcement belongs in a `GovernanceHook` — `ComplianceGate` exists for exactly this.
 - **`RiskFlag.is_from_enforceable_source`** describes the finding. It replaced a name that implied a rule about who may act on it.
 - **An organization's routing table always wins.** `flag_risk()` consults the configured table first and falls back to `suggested_clearance_role()` only where the table has no entry, in place of leaving a flag unassigned.
 - **`evaluate_vendor()` is no longer the approval path.** Its weighted composite is compensatory: a vendor in active copyright litigation whose tool competes with its own training sources scored 95 and landed in `PREFERRED`, because `copyright_risk` was computed and never consulted by the tiering logic. It is retained for comparing vendors on documentation quality and documented as unsuitable for approving one. Use `derive_flags()` and `tier_from_flags()`.

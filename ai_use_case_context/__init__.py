@@ -436,4 +436,4 @@ __all__ = [
     "DEFAULT_VENDOR_RULES",
 ]
 
-__version__ = "2.0.0b1"
+__version__ = "2.0.0"

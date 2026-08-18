@@ -4,6 +4,32 @@
 
 A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
+## A note on the name
+
+The package installs as `ai-use-case-context` and imports as
+`ai_use_case_context`. The repository is **My AI Scorecard**. Both names are
+correct, and the difference is history rather than accident.
+
+The project began as a scorecard — a way to rate AI vendors and tools on a set
+of dimensions and compare the numbers. That premise did not survive contact
+with the problem. A weighted score is **compensatory**: strength in one
+dimension silently offsets a disqualifying failure in another, and the result
+is a number that reads as a judgment while hiding the fact that produced it. A
+vendor in active copyright litigation still scores 95 and lands in the top
+tier. `evaluate_vendor()` still does exactly that, and
+[Limitations](docs/limitations.md) says plainly that it is not a basis for
+approving anyone.
+
+What replaced the scorecard is what the package name describes: **context for a
+use case**. Facts are recorded, rules turn them into findings, each finding
+carries the authority behind it, and nothing is averaged. Findings that should
+not be averageable never are.
+
+So the repository keeps the name the work is known by, and the package keeps
+the name that says what it does. If you arrived here looking for a scorecard,
+the honest answer is that this is the thing built after concluding a scorecard
+was the wrong shape.
+
 ## Documentation
 
 Full documentation lives in [`docs/`](docs/index.md).
@@ -25,14 +51,27 @@ guides are the better starting point.
 
 ### Built-in Dimensions
 
-| Dimension | Scope |
-|-----------|-------|
-| **Legal / IP Ownership** | Licensing, likeness rights, training data provenance |
-| **Bias / Fairness** | Bias in outputs, representation, demographic fairness |
-| **Safety / Harmful Output** | Harmful, misleading, or unsafe model outputs |
-| **Security / Model Integrity** | Model vulnerabilities, adversarial attacks, supply chain security |
-| **Technical Feasibility** | Pipeline compatibility, model validation, infrastructure readiness |
-| **Output Quality** | Visual/audio fidelity, resolution, production-grade quality standards |
+The six are a **convention, not a sourced taxonomy** — no standards body
+supplies this partition. Rules carry an `AuthoritySource` naming what stands
+behind each finding; the dimension set itself carries nothing, and does not
+pretend to.
+
+| Dimension | Scope | Default rules |
+|-----------|-------|---------------|
+| **Legal / IP Ownership** | Licensing, likeness rights, training data provenance | 29 |
+| **Security / Model Integrity** | Model vulnerabilities, adversarial attacks, supply chain security | 8 |
+| **Technical Feasibility** | Pipeline compatibility, model validation, infrastructure readiness | 4 |
+| **Output Quality** | Visual/audio fidelity, resolution, production-grade quality standards | 4 |
+| **Bias / Fairness** | Representational harm in outputs | **0** |
+| **Safety / Harmful Output** | Harmful, misleading, or unsafe model outputs | **0** |
+
+**The last two are empty slots.** They name real concerns and nothing in this
+framework derives into them. Assessing representational harm or harmful output
+requires evidence about model behaviour that this framework does not collect —
+it records supply, deployment, and output-role facts, not evaluation results.
+Raising a finding there without that evidence would be exactly the guesswork
+the rest of the design refuses. They stay available for your own rules and for
+flags you raise by hand.
 
 ### Custom Dimensions
 

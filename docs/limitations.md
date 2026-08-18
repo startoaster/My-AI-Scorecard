@@ -110,6 +110,32 @@ which material carries consequence beyond the production. `IPClass` itself is
 deliberately **unordered** — ranking it would assert a hierarchy no source
 supplies.
 
+## The dimension set is a convention
+
+The six built-in `RiskDimension` members are a starting shape, not a sourced
+taxonomy. No standards body supplies this partition. Every *rule* carries an
+`AuthoritySource` naming what stands behind that finding; the dimensions
+themselves carry nothing, and the framework does not imply otherwise. Add your
+own with `custom_dimension()`.
+
+Two of the six have **no default rules at all**:
+
+| Dimension | Default rules |
+| --- | --- |
+| `BIAS` — Bias / Fairness | 0 |
+| `SAFETY` — Safety / Harmful Output | 0 |
+
+They name real concerns, and this framework derives nothing into them.
+Assessing representational harm or harmful output requires evidence about how
+a model behaves — evaluation results, red-team findings, measured output
+distributions. This framework records supply, deployment, and output-role
+facts, and holds none of that. A finding raised there on the facts available
+would be an assertion dressed as a derivation.
+
+They stay in the enum because they are legitimate places to route a flag you
+raise by hand, or one your own rules produce from evidence you do hold.
+`tests/test_packaging.py` pins the count at zero so the claim cannot go stale.
+
 ## Crowd or vendor input is a prior, never a clearance
 
 If you feed the framework practitioner consensus or vendor self-assessment,

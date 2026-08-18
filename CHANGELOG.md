@@ -13,6 +13,10 @@ Nothing yet.
 
 First release published to PyPI: `pip install ai-use-case-context`. `tag-release.yml` uploads via trusted publishing, as the last step after the tag and GitHub Release — a PyPI version cannot be deleted and re-uploaded, so a failure there leaves a recoverable state rather than burning the version number.
 
+**Two dimensions are documented as empty.** `BIAS` and `SAFETY` carry no default rules and never did — the README described their scope as though the framework covered them. It does not: assessing representational harm or harmful output needs evidence about model behaviour that this framework does not collect. Both are now marked as empty slots in the README, in `RiskDimension`, and in the limitations page, and the count is pinned by a test. The dimension set as a whole is documented as a convention rather than a sourced taxonomy.
+
+**The package name is explained rather than changed.** The repository is My AI Scorecard; the package is `ai-use-case-context`. A README section covers why — the scorecard premise was replaced because a weighted composite is compensatory, and the package name describes what was built instead.
+
 Promotes `2.0.0b1` to stable. No functional change: the beta shipped the complete 2.0 surface and nothing was altered between the two. Version, development-status classifier, and README banner only.
 
 The API is now frozen for 2.x. `compliance.py` is stable in its current shape, which means it still records ISO 42001, NIST AI RMF and EU AI Act assessments without deriving flags from them — documented in [Limitations](docs/limitations.md) and unchanged by this release.

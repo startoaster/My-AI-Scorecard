@@ -382,7 +382,7 @@ instead of silently presenting our vocabulary as someone else's.
 ## Installation
 
 ```bash
-pip install -e .
+pip install ai-use-case-context
 ```
 
 Requires Python 3.9+. No external dependencies for the core library.
@@ -390,13 +390,13 @@ Requires Python 3.9+. No external dependencies for the core library.
 For the web dashboard:
 
 ```bash
-pip install -e ".[web]"
+pip install "ai-use-case-context[web]"
 ```
 
-For development (tests):
+Working on the framework itself, from a clone:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]"      # core, web extra, and pytest
 ```
 
 ## Quick Start

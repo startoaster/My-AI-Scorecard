@@ -21,18 +21,18 @@ determination is required — not that a particular agreement applies.
 `accept_risk()` records an acceptance. It does not check whether the person
 accepting has authority to.
 
-That was tried and removed. Two reasons:
+That is deliberate, for two reasons:
 
 **It cannot work.** Standing comes from an organization's delegation of
 authority and its identity systems, neither of which a library can see. Any
-check would be bypassed by assigning `status` directly, so it bought false
+check would be bypassed by assigning `status` directly, so it would buy false
 assurance rather than control.
 
 **It breaks the contract.** `is_blocked()` reports and lets the caller decide.
 A method that raises instead is inconsistent with everything around it, and
 pushes callers into working around the library.
 
-What replaced it is visibility:
+What it does instead is make the gap findable:
 
 ```python
 from ai_use_case_context import (

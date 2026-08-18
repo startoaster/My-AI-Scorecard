@@ -10,10 +10,10 @@ and escalate like any other.
 Prefer that path over :func:`evaluate_vendor`. The weighted composite it
 produces is **compensatory** — a strong showing in one dimension offsets a
 disqualifying failure in another. Concretely, a vendor in active copyright
-litigation whose tool competes with its own training sources could score 95 and
-land in the ``PREFERRED`` tier, because ``copyright_risk`` was computed and then
-never consulted by the tiering logic. Some findings should not be averageable,
-which is what flags and :meth:`VendorScorecard.tier_from_flags` provide.
+litigation whose tool competes with its own training sources scores 95 and lands
+in the ``PREFERRED`` tier: ``copyright_risk`` informs the recommendations but
+never the score or the tier. Some findings should not be averageable, which is
+what flags and :meth:`VendorScorecard.tier_from_flags` provide.
 
 :func:`evaluate_vendor` is retained for existing callers and still useful for
 comparing vendors on documentation quality. It is not a basis for approving
@@ -227,11 +227,10 @@ class CopyrightAssessment:
     def risk_level(self) -> str:
         """Assess copyright risk level: low, medium, high, critical.
 
-        Each high-severity fact stands on its own. An earlier version required
-        two of them before reporting "high", with the result that a vendor
-        whose training data was not confirmed as lawfully obtained — on its own
-        the most consequential fact here — reported as "low" so long as nothing
-        else was wrong.
+        Each high-severity fact stands on its own. Training data not
+        confirmed as lawfully obtained is, by itself, enough to report
+        "high" — it is the most consequential fact here and nothing else
+        being wrong does not offset it.
 
         The two EU fields deliberately do not affect this level. Whether they
         matter depends on where the work is exploited, and this object carries

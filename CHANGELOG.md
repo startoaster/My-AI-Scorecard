@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [2.0.0] - 2026-08-18
+
+Promotes `2.0.0b1` to stable. No functional change: the beta shipped the complete 2.0 surface and nothing was altered between the two. Version, development-status classifier, and README banner only.
+
+The API is now frozen for 2.x. `compliance.py` is stable in its current shape, which means it still records ISO 42001, NIST AI RMF and EU AI Act assessments without deriving flags from them — documented in [Limitations](docs/limitations.md) and unchanged by this release.
+
 ## [2.0.0b1] - 2026-08-17
 
 ### Added

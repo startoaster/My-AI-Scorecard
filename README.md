@@ -1,6 +1,6 @@
 # AI Use Case Context Framework
 
-> **v2.0.0b1** — Beta. The API is feature-complete for 2.0 but not yet frozen; it may still change before the stable 2.0.0 release. See the [changelog](CHANGELOG.md) for breaking changes from v1.x, and [Limitations](docs/limitations.md) for what the framework deliberately does not do.
+> **v2.0.0** — Stable. See the [changelog](CHANGELOG.md) for breaking changes from v1.x, and [Limitations](docs/limitations.md) for what the framework deliberately does not do.
 
 A generalizable governance model for AI-driven media production use cases. Provides **flag**, **route**, and **block** capabilities across risk dimensions — six built-in plus unlimited user-defined custom dimensions. Includes configurable **security dimension presets** (TPN, VFX, Enterprise) and an open **governance hook protocol** for enterprise InfoSec integration. Designed to integrate with PRD and taxonomy frameworks including MovieLabs OMC-aligned production workflows.
 
